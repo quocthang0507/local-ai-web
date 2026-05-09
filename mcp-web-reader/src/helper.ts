@@ -1,5 +1,6 @@
 import dns from "node:dns/promises";
 import net from "node:net";
+import { convert } from "html-to-text";
 import { ALLOW_DOMAINS, DEBUG } from "./config.js";
 
 export function decodeBasicEntities(text: string): string {
@@ -13,17 +14,15 @@ export function decodeBasicEntities(text: string): string {
 }
 
 export function htmlToText(html: string): string {
-  let s = html;
+  let s = convert(html, {
+    wordwrap: false,
+    selectors: [
+      { selector: "script", format: "skip" },
+      { selector: "style", format: "skip" },
+      { selector: "noscript", format: "skip" }
+    ]
+  });
 
-  s = s.replace(/<script[\s\S]*?<\/script>/gi, " ");
-  s = s.replace(/<style[\s\S]*?<\/style>/gi, " ");
-  s = s.replace(/<noscript[\s\S]*?<\/noscript>/gi, " ");
-  s = s.replace(/<!--[\s\S]*?-->/g, " ");
-
-  s = s.replace(/<\/(p|div|section|article|header|footer|li|h1|h2|h3|h4|h5|h6)>/gi, "\n");
-  s = s.replace(/<br\s*\/?>/gi, "\n");
-
-  s = s.replace(/<[^>]+>/g, " ");
   s = decodeBasicEntities(s);
 
   s = s
