@@ -33,3 +33,9 @@ export const ALLOW_DOMAINS = (process.env.ALLOW_DOMAINS || "")
   .split(",")
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
+
+export const CODE_WEB_PREFERRED_DOMAINS = (process.env.CODE_WEB_PREFERRED_DOMAINS || "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+

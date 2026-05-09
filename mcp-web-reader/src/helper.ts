@@ -27,7 +27,7 @@ export function htmlToText(html: string): string {
 
   s = s
 	.split("\n")
-	.map((line) => line.replace(/\s+/g, " ").trim())
+	.map((line: string) => line.replace(/\s+/g, " ").trim())
 	.filter(Boolean)
 	.join("\n");
 

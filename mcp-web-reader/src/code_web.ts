@@ -1,5 +1,6 @@
 import { fetchWithSafety, renderUrlToSource } from "./browser.js";
 import { htmlToMarkdown } from "./extract.js";
+import { decodeBasicEntities } from "./helper.js";
 
 export type WebCodeSnippet = {
   url: string;
@@ -71,13 +72,7 @@ export function extractPreCodeBlocksFromHtml(html: string): string[] {
   const re = /<pre[^>]*>\s*<code[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
-    const code = (m[1] || "")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&amp;/g, "&")
-      .replace(/&quot;/g, "\"")
-      .replace(/&#39;/g, "'")
-      .trim();
+    const code = decodeBasicEntities(m[1] || "").trim();
     if (code) blocks.push(code);
   }
   return blocks;
@@ -104,8 +99,11 @@ export function scoreDomain(url: string): number {
   try {
     const hostname = new URL(url).hostname.toLowerCase();
     if (hostMatchesDomain(hostname, "github.com")) return 5;
+    if (hostMatchesDomain(hostname, "gist.github.com")) return 5;
     if (hostMatchesDomain(hostname, "stackoverflow.com")) return 4;
     if (hostMatchesDomain(hostname, "stackexchange.com")) return 4;
+    if (hostMatchesDomain(hostname, "gitlab.com")) return 3;
+    if (hostMatchesDomain(hostname, "bitbucket.org")) return 3;
   } catch {
     // Keep heuristic fallback behavior for malformed/non-absolute URLs.
   }
@@ -118,20 +116,25 @@ export function githubToRaw(url: string): string {
   try {
     const u = new URL(url);
 
-    // chỉ xử lý github
+    // Support for gist.github.com
+    if (u.hostname === "gist.github.com") {
+      const parts = u.pathname.split("/").filter(Boolean);
+      // format: /user/id or just /id
+      if (parts.length >= 2) {
+        return `https://gist.githubusercontent.com/${parts[0]}/${parts[1]}/raw`;
+      } else if (parts.length === 1) {
+        return `https://gist.githubusercontent.com/anonymous/${parts[0]}/raw`;
+      }
+      return url;
+    }
+
+    // Support for github.com
     if (u.hostname !== "github.com") return url;
 
     const parts = u.pathname.split("/");
 
-    // format: /user/repo/blob/branch/path
-    // index:   0  empty
-    //          1  user
-    //          2  repo
-    //          3  blob
-    //          4  branch
-    //          5+ path
-
-    if (parts.length > 5 && parts[3] === "blob") {
+    // format: /user/repo/blob/branch/path or /user/repo/raw/branch/path
+    if (parts.length > 5 && (parts[3] === "blob" || parts[3] === "raw")) {
       const user = parts[1];
       const repo = parts[2];
       const branch = parts[4];
@@ -147,7 +150,10 @@ export function githubToRaw(url: string): string {
 }
 
 export function isProbablyRawCodeUrl(url: string): boolean {
-  return url.startsWith("https://raw.githubusercontent.com/");
+  return (
+    url.startsWith("https://raw.githubusercontent.com/") ||
+    url.startsWith("https://gist.githubusercontent.com/")
+  );
 }
 
 function isHostOrSubdomain(host: string, domain: string): boolean {
@@ -159,9 +165,23 @@ export function scoreSnippet(url: string, code: string, lang?: string): number {
 
   const host = (() => { try { return new URL(url).hostname.toLowerCase(); } catch { return ""; } })();
 
-  if (isHostOrSubdomain(host, "github.com") || isHostOrSubdomain(host, "raw.githubusercontent.com")) score += 5;
+  if (
+    isHostOrSubdomain(host, "github.com") ||
+    isHostOrSubdomain(host, "raw.githubusercontent.com") ||
+    isHostOrSubdomain(host, "gist.github.com") ||
+    isHostOrSubdomain(host, "gist.githubusercontent.com")
+  ) {
+    score += 5;
+  }
   if (isHostOrSubdomain(host, "stackoverflow.com") || isHostOrSubdomain(host, "stackexchange.com")) score += 4;
-  if (isHostOrSubdomain(host, "developer.mozilla.org") || isHostOrSubdomain(host, "learn.microsoft.com") || host.startsWith("docs.")) score += 3;
+  if (
+    isHostOrSubdomain(host, "developer.mozilla.org") ||
+    isHostOrSubdomain(host, "learn.microsoft.com") ||
+    host.startsWith("docs.") ||
+    isHostOrSubdomain(host, "gitlab.com")
+  ) {
+    score += 3;
+  }
 
   const lines = code.split(/\r?\n/).length;
   if (lines >= 5 && lines <= 80) score += 3;

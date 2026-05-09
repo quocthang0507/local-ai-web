@@ -6,8 +6,8 @@ import { getCache, setCache, clearCache, cacheSize, cacheStats } from './cache.j
 import { htmlToMarkdown } from './extract.js';
 import { getGlobalBrowser, closeGlobalBrowser, fetchWithSafety, renderUrlToSource } from './browser.js';
 import { searxngSearch } from './searxng.js';
-import { fetchSnippetsFromUrl, scoreSnippet, truncateCode } from './code_web.js';
-import { ENABLE_CACHE, SEARXNG_URL, REQUEST_TIMEOUT_MS, DEFAULT_MAX_CHARS, FETCH_CACHE_TTL_MS, SEARCH_CACHE_TTL_MS, RENDER_CACHE_TTL_MS, CODE_WEB_MAX_URLS, CODE_WEB_MAX_SNIPPETS, CODE_WEB_MAX_CHARS_PER_SNIPPET, CODE_WEB_CACHE_TTL_MS } from './config.js';
+import { fetchSnippetsFromUrl, scoreSnippet, truncateCode, rewriteQueries, filterUrls } from './code_web.js';
+import { ENABLE_CACHE, SEARXNG_URL, REQUEST_TIMEOUT_MS, DEFAULT_MAX_CHARS, FETCH_CACHE_TTL_MS, SEARCH_CACHE_TTL_MS, RENDER_CACHE_TTL_MS, CODE_WEB_MAX_URLS, CODE_WEB_MAX_SNIPPETS, CODE_WEB_MAX_CHARS_PER_SNIPPET, CODE_WEB_CACHE_TTL_MS, CODE_WEB_PREFERRED_DOMAINS } from './config.js';
 
 export function registerTools(server: McpServer) {
 server.registerTool(
@@ -89,9 +89,9 @@ server.registerTool(
   {
     description: "Search the web using local SearXNG. Returns title, url, snippet, and source.",
     inputSchema: {
-    query: z.string().min(1).describe("Search query"),
+    query: z.string().min(1).max(500).describe("Search query"),
     max_results: z.number().int().min(1).max(10).default(5),
-    language: z.string().optional().describe("Optional language code, e.g. en, vi"),
+    language: z.string().max(20).optional().describe("Optional language code, e.g. en, vi"),
     time_range: z.enum(["day", "week", "month", "year"]).optional().describe("Optional time range for recent results")
     }
   },
@@ -404,18 +404,13 @@ server.registerTool(
   {
     description: "Search code snippets from the internet (via SearXNG), fetch pages, extract code blocks, rank and return best snippets.",
     inputSchema: {
-    query: z.string().min(1),
+    query: z.string().min(1).max(500),
     max_snippets: z.number().int().min(1).max(50).default(10),
-    language_hint: z.string().optional().describe("Optional: e.g. typescript, python, rust"),
+    language_hint: z.string().max(50).optional().describe("Optional: e.g. typescript, python, rust"),
     }
   },
   async ({ query, max_snippets, language_hint }) => {
-    const enhancedQueries = [
-      query,
-      `${query} code example`,
-      `${query} site:github.com`,
-      `${query} site:stackoverflow.com`,
-    ];
+    const enhancedQueries = rewriteQueries(query);
 
     const cacheKey = `search_code_web:${JSON.stringify({ query, enhancedQueries, max_snippets, language_hint: language_hint || "" })}`;
 
@@ -439,16 +434,9 @@ server.registerTool(
       })
     );
 
-    // Dedup URLs and keep a reasonable number to fetch
-    const seen = new Set<string>();
-    const urls: string[] = [];
-    for (const r of allResults) {
-      if (!r.url) continue;
-      if (seen.has(r.url)) continue;
-      seen.add(r.url);
-      urls.push(r.url);
-      if (urls.length >= CODE_WEB_MAX_URLS) break;
-    }
+    // Dedup URLs and filter/score them
+    const allUrls = Array.from(new Set(allResults.map(r => r.url).filter(Boolean)));
+    const urls = filterUrls(allUrls, CODE_WEB_PREFERRED_DOMAINS, CODE_WEB_MAX_URLS);
 
     // 2) Fetch pages & extract snippets in parallel (with concurrency limit)
     const snippets: Array<{
