@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "local-web-reader": {
+      "command": "node",
+      "args": ["/home/YOUR_NAME/local-ai-web/mcp-web-reader/dist/index.js"],
+      "env": {
+        "SEARXNG_URL": "http://127.0.0.1:8080"
+      }
+    }
+  }
+}

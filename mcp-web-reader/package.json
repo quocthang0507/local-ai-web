@@ -1,19 +1,27 @@
 {
   "name": "mcp-web-reader",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "type": "module",
   "private": true,
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js"
+    "build:watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "print:mcp": "node scripts/print-mcp-config.js",
+    "verify": "node scripts/verify.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
+    "@mozilla/readability": "^0.5.0",
+    "jsdom": "^24.1.3",
     "playwright": "^1.59.1",
+    "turndown": "^7.2.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@types/node": "^22.19.18",
+    "@types/jsdom": "^28.0.1",
+    "@types/node": "^22.0.0",
+    "@types/turndown": "^5.0.5",
     "typescript": "^5.8.0"
   }
 }

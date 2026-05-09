@@ -4,6 +4,8 @@ import { z } from "zod";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import dns from "node:dns/promises";
 import net from "node:net";
+import { htmlToMarkdown } from "./extract.js";
+import { getCache, setCache, clearCache, cacheSize } from "./cache.js";
 
 const SEARXNG_URL = process.env.SEARXNG_URL || "http://127.0.0.1:8080";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || "10000");
@@ -14,6 +16,10 @@ const RENDER_NETWORK_IDLE_TIMEOUT_MS = Number(process.env.RENDER_NETWORK_IDLE_TI
 const RENDER_EXTRA_WAIT_MS = Number(process.env.RENDER_EXTRA_WAIT_MS || "1500");
 const RENDER_SCROLL_STEPS = Number(process.env.RENDER_SCROLL_STEPS || "3");
 const RENDER_SCROLL_DELAY_MS = Number(process.env.RENDER_SCROLL_DELAY_MS || "800");
+const ENABLE_CACHE = process.env.ENABLE_CACHE !== "0";
+const SEARCH_CACHE_TTL_MS = Number(process.env.SEARCH_CACHE_TTL_MS || "300000");
+const FETCH_CACHE_TTL_MS = Number(process.env.FETCH_CACHE_TTL_MS || "600000");
+const RENDER_CACHE_TTL_MS = Number(process.env.RENDER_CACHE_TTL_MS || "900000");
 
 const RENDER_BLOCK_RESOURCE_TYPES = new Set(
   (process.env.RENDER_BLOCK_RESOURCE_TYPES || "image,media,font")
@@ -195,15 +201,28 @@ async function createSafeBrowserPage(): Promise<{
   browser: Browser;
   context: BrowserContext;
   page: Page;
+  report: {
+    blockedRequestsCount: number;
+    blockedPrivateNetworkRequests: number;
+    blockedByResourceType: Record<string, number>;
+    allowedRequestsCount: number;
+  };
 }> {
+  const report = {
+    blockedRequestsCount: 0,
+    blockedPrivateNetworkRequests: 0,
+    blockedByResourceType: {} as Record<string, number>,
+    allowedRequestsCount: 0
+  };
+
   const browser = await chromium.launch({
     headless: true,
     args: [
       "--disable-dev-shm-usage",
       "--disable-gpu",
       "--no-first-run",
-      "--no-default-browser-check",
-    ],
+      "--no-default-browser-check"
+    ]
   });
 
   const context = await browser.newContext({
@@ -212,10 +231,7 @@ async function createSafeBrowserPage(): Promise<{
     userAgent:
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
       "(KHTML, like Gecko) Chrome/120 Safari/537.36 LMStudioLocalWebReader/1.2",
-    viewport: {
-      width: 1365,
-      height: 900,
-    },
+    viewport: { width: 1365, height: 900 }
   });
 
   await context.route("**/*", async (route) => {
@@ -223,24 +239,27 @@ async function createSafeBrowserPage(): Promise<{
     const reqUrl = req.url();
     const resourceType = req.resourceType();
 
-    // Chặn tài nguyên nặng để render nhanh hơn.
-    // Không chặn script/xhr/fetch vì SPA cần chúng.
     if (RENDER_BLOCK_RESOURCE_TYPES.has(resourceType)) {
+      report.blockedRequestsCount++;
+      report.blockedByResourceType[resourceType] =
+        (report.blockedByResourceType[resourceType] || 0) + 1;
       return route.abort();
     }
 
-    // Chặn mọi request tới localhost/private IP, kể cả request phụ của SPA.
     const safe = await isSafeRequestUrl(reqUrl);
     if (!safe) {
+      report.blockedRequestsCount++;
+      report.blockedPrivateNetworkRequests++;
       return route.abort();
     }
 
+    report.allowedRequestsCount++;
     return route.continue();
   });
 
   const page = await context.newPage();
 
-  return { browser, context, page };
+  return { browser, context, page, report };
 }
 
 async function renderUrlToSource(rawUrl: string, options: {
@@ -259,7 +278,7 @@ async function renderUrlToSource(rawUrl: string, options: {
 }> {
   const safeUrl = await assertSafeUrl(rawUrl);
 
-  const { browser, context, page } = await createSafeBrowserPage();
+  const { browser, context, page, report } = await createSafeBrowserPage();
 
   try {
     await page.goto(safeUrl.toString(), {
@@ -322,10 +341,13 @@ async function renderUrlToSource(rawUrl: string, options: {
       result.renderedHtml = html.slice(0, options.maxHtmlChars);
     }
 
-    return result;
+    return {
+      ...result,
+      requestReport: report
+    } as any;
   } finally {
-    await context.close().catch(() => {});
-    await browser.close().catch(() => {});
+    await context.close().catch(() => { });
+    await browser.close().catch(() => { });
   }
 }
 
@@ -478,6 +500,93 @@ server.tool(
       ...rendered,
       safety:
         "Rendered with headless Chromium. Local/private network requests are blocked. Images/media/fonts are blocked by default. Output is truncated before sending to the model.",
+    });
+  }
+);
+
+server.tool(
+  "health_check",
+  "Check whether MCP server, SearXNG, and Playwright Chromium are ready.",
+  {},
+  async () => {
+    const checks: Record<string, unknown> = {
+      mcp: "ok",
+      searxng: "unknown",
+      playwright: "unknown",
+      searxngUrl: SEARXNG_URL
+    };
+
+    try {
+      const endpoint = new URL("/search", SEARXNG_URL);
+      endpoint.searchParams.set("q", "test");
+      endpoint.searchParams.set("format", "json");
+
+      const res = await fetch(endpoint, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      });
+
+      checks.searxng = res.ok ? "ok" : `error_http_${res.status}`;
+    } catch (err: any) {
+      checks.searxng = `error: ${err?.message || String(err)}`;
+    }
+
+    try {
+      const browser = await chromium.launch({ headless: true });
+      await browser.close();
+      checks.playwright = "ok";
+    } catch (err: any) {
+      checks.playwright = `error: ${err?.message || String(err)}`;
+    }
+
+    return textResult(checks);
+  }
+);
+
+server.tool(
+  "fetch_rendered_markdown",
+  "Render a JavaScript-heavy page and return cleaned Markdown extracted from the rendered DOM.",
+  {
+    url: z.string().url().describe("URL to render"),
+    max_chars: z.number().int().min(1000).max(80000).default(30000),
+    wait_ms: z.number().int().min(0).max(20000).optional(),
+    scroll_steps: z.number().int().min(0).max(20).optional()
+  },
+  async ({ url, max_chars, wait_ms, scroll_steps }) => {
+    const rendered = await renderUrlToSource(url, {
+      includeText: false,
+      includeHtml: true,
+      maxTextChars: 1000,
+      maxHtmlChars: 200000,
+      waitMs: wait_ms,
+      scrollSteps: scroll_steps
+    });
+
+    const extracted = htmlToMarkdown(rendered.renderedHtml || "", rendered.finalUrl);
+
+    return textResult({
+      mode: "rendered_markdown",
+      requestedUrl: rendered.requestedUrl,
+      finalUrl: rendered.finalUrl,
+      title: extracted.title || rendered.title,
+      excerpt: extracted.excerpt,
+      byline: extracted.byline,
+      markdown: extracted.markdown.slice(0, max_chars),
+      safety:
+        "Rendered with headless Chromium. Private/local network requests are blocked. Markdown is truncated before sending to the model."
+    });
+  }
+);
+
+server.tool(
+  "clear_cache",
+  "Clear in-memory search/fetch/render cache.",
+  {},
+  async () => {
+    const cleared = clearCache();
+    return textResult({
+      clearedEntries: cleared,
+      cacheSize: cacheSize()
     });
   }
 );
