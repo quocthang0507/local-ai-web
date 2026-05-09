@@ -1,0 +1,28 @@
+[botdetection]
+ipv4_prefix = 32
+ipv6_prefix = 48
+
+# Trust typical local/LAN proxy hops so local Docker traffic does not trigger
+# missing X-Forwarded-For/X-Real-IP noise.
+trusted_proxies = [
+  '127.0.0.0/8',
+  '::1',
+  '192.168.0.0/16',
+  '172.16.0.0/12',
+  '10.0.0.0/8',
+  'fd00::/8',
+]
+
+[botdetection.ip_limit]
+filter_link_local = false
+link_token = false
+
+[botdetection.ip_lists]
+block_ip = []
+pass_ip = [
+  '192.168.0.0/16',
+  '172.16.0.0/12',
+  '10.0.0.0/8',
+  '127.0.0.0/8',
+]
+pass_searxng_org = true

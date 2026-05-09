@@ -1,4 +1,20 @@
 export const SEARXNG_URL = process.env.SEARXNG_URL || "http://127.0.0.1:8080";
+const RAW_SEARXNG_ENGINES = (process.env.SEARXNG_ENGINES || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+export const DEFAULT_SEARXNG_ENGINES = ["google", "bing", "wikipedia"];
+export const USING_DEFAULT_SEARXNG_ENGINES = RAW_SEARXNG_ENGINES.length === 0;
+export const SEARXNG_ENGINES = USING_DEFAULT_SEARXNG_ENGINES
+  ? DEFAULT_SEARXNG_ENGINES
+  : RAW_SEARXNG_ENGINES;
+
+export const SEARXNG_REQUEST_HEADERS: Record<string, string> = {
+  Accept: "application/json",
+  "X-Forwarded-For": "127.0.0.1",
+  "X-Real-IP": "127.0.0.1"
+};
 
 export const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || "15000");
 export const MAX_FETCH_BYTES = Number(process.env.MAX_FETCH_BYTES || String(512 * 1024));
@@ -18,7 +34,7 @@ export const RENDER_CACHE_TTL_MS = Number(process.env.RENDER_CACHE_TTL_MS || "60
 export const DEBUG = process.env.DEBUG_LOCAL_WEB_READER === "1";
 
 export const CODE_WEB_CACHE_TTL_MS = Number(process.env.CODE_WEB_CACHE_TTL_MS || "300000");
-export const CODE_WEB_MAX_URLS = Number(process.env.CODE_WEB_MAX_URLS || "8");
+export const CODE_WEB_MAX_URLS = Number(process.env.CODE_WEB_MAX_URLS || "5");
 export const CODE_WEB_MAX_SNIPPETS = Number(process.env.CODE_WEB_MAX_SNIPPETS || "20");
 export const CODE_WEB_MAX_CHARS_PER_SNIPPET = Number(process.env.CODE_WEB_MAX_CHARS_PER_SNIPPET || "3000");
 

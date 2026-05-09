@@ -69,12 +69,25 @@ export function extractFencedCodeBlocks(md: string): Array<{ lang?: string; code
 // Optional: Extract <pre><code> blocks from HTML string (fallback if you use rendered HTML)
 export function extractPreCodeBlocksFromHtml(html: string): string[] {
   const blocks: string[] = [];
-  const re = /<pre[^>]*>\s*<code[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi;
+
+  // Pattern 1: <pre><code>...</code></pre> (Stack Overflow, docs sites)
+  const re1 = /<pre[^>]*>\s*<code[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(html))) {
-    const code = decodeBasicEntities(m[1] || "").trim();
-    if (code) blocks.push(code);
+  while ((m = re1.exec(html))) {
+    const code = decodeBasicEntities((m[1] || "").replace(/<[^>]+>/g, "")).trim();
+    if (code && code.length >= 20 && code.length <= 10000) blocks.push(code);
   }
+
+  if (blocks.length > 0) return blocks;
+
+  // Pattern 2: bare <pre>...</pre> (GitHub syntax-highlighted <span>, many blogs)
+  // Strip inner HTML tags to recover plain code text.
+  const re2 = /<pre[^>]*>([\s\S]*?)<\/pre>/gi;
+  while ((m = re2.exec(html))) {
+    const code = decodeBasicEntities((m[1] || "").replace(/<[^>]+>/g, "")).trim();
+    if (code && code.length >= 20 && code.length <= 10000) blocks.push(code);
+  }
+
   return blocks;
 }
 
@@ -208,31 +221,70 @@ export async function fetchSnippetsFromUrl(url: string): Promise<Array<{ lang?: 
     return code.trim() ? [{ code, lang: undefined }] : [];
   }
 
-  // 2) For normal pages: use Playwright render to get real DOM
-  const rendered = await renderUrlToSource(finalUrl, {
-    includeText: false,
-    includeHtml: true,
-    maxTextChars: 1000,
-    maxHtmlChars: 200000,
-    waitMs: 2000,
-    scrollSteps: 2
-  });
+  // 2) For normal pages: try plain HTTP fetch first (fast; most code sites serve HTML directly),
+  //    then fall back to Playwright for JS-rendered pages only if needed.
+  let html = "";
+  let finalRenderedUrl = finalUrl;
 
-  const html = rendered.renderedHtml || "";
-  if (!html) return [];
-
-  // Convert to markdown (main content)
-  const extracted = htmlToMarkdown(html, rendered.finalUrl);
-  const md = extracted.markdown || "";
-
-  // Extract markdown fenced blocks first
-  const fenced = extractFencedCodeBlocks(md);
-
-  // Fallback: extract <pre><code> from HTML if markdown doesn’t contain fences
-  if (fenced.length === 0) {
-    const pre = extractPreCodeBlocksFromHtml(html);
-    return pre.map(code => ({ code, lang: undefined }));
+  try {
+    const fetched = await fetchWithSafety(finalUrl);
+    html = fetched.body;
+    finalRenderedUrl = fetched.finalUrl || finalUrl;
+  } catch {
+    // Plain fetch failed (e.g. redirect to HTTPS, 403) — try Playwright
+    try {
+      const rendered = await renderUrlToSource(finalUrl, {
+        includeText: false,
+        includeHtml: true,
+        maxTextChars: 1000,
+        maxHtmlChars: 200000,
+        waitMs: 500,
+        scrollSteps: 0
+      });
+      html = rendered.renderedHtml || "";
+      finalRenderedUrl = rendered.finalUrl || finalUrl;
+    } catch {
+      return [];
+    }
   }
 
-  return fenced;
+  if (!html) return [];
+
+  // 3) Try HTML extraction FIRST — Readability (used by htmlToMarkdown) strips <pre> blocks,
+  //    so we must pull code from raw HTML before any Readability pass.
+  //    This handles GitHub (<div class="highlight"><pre><span>…</span></pre>),
+  //    Stack Overflow (<pre><code>…</code></pre>), and most blog/tutorial sites.
+  const htmlBlocks = extractPreCodeBlocksFromHtml(html);
+  if (htmlBlocks.length > 0) {
+    return htmlBlocks.map(code => ({ code, lang: undefined }));
+  }
+
+  // 4) If no <pre> blocks found and the page might be JS-rendered, try Playwright
+  const looksLikeSpa = html.includes('<div id="root">') || html.includes('<div id="app">') ||
+    (html.includes('<script') && !html.includes('<pre'));
+  if (looksLikeSpa) {
+    try {
+      const rendered = await renderUrlToSource(finalUrl, {
+        includeText: false,
+        includeHtml: true,
+        maxTextChars: 1000,
+        maxHtmlChars: 200000,
+        waitMs: 500,
+        scrollSteps: 0
+      });
+      const spaHtml = rendered.renderedHtml || "";
+      const spaBlocks = extractPreCodeBlocksFromHtml(spaHtml);
+      if (spaBlocks.length > 0) return spaBlocks.map(code => ({ code, lang: undefined }));
+      finalRenderedUrl = rendered.finalUrl || finalRenderedUrl;
+      if (spaHtml) {
+        const extracted = htmlToMarkdown(spaHtml, finalRenderedUrl);
+        return extractFencedCodeBlocks(extracted.markdown || "");
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 5) Final fallback: convert static HTML to markdown
+  const extracted = htmlToMarkdown(html, finalRenderedUrl);
+  const md = extracted.markdown || "";
+  return extractFencedCodeBlocks(md);
 }

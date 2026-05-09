@@ -1,4 +1,9 @@
-use_default_settings: true
+use_default_settings:
+  engines:
+    remove:
+      - ahmia
+      - torch
+      - wikidata
 
 server:
   secret_key: "this-is-a-long-random-string-for-ai-configuration"
@@ -11,3 +16,13 @@ search:
   formats:
     - html
     - json
+
+engines:
+  - name: karmasearch
+    disabled: true
+  - name: brave
+    disabled: true
+  - name: duckduckgo
+    disabled: true
+  - name: startpage
+    disabled: true

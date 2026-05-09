@@ -7,7 +7,7 @@ import { htmlToMarkdown } from './extract.js';
 import { getGlobalBrowser, closeGlobalBrowser, fetchWithSafety, renderUrlToSource } from './browser.js';
 import { searxngSearch } from './searxng.js';
 import { fetchSnippetsFromUrl, scoreSnippet, truncateCode, rewriteQueries, filterUrls } from './code_web.js';
-import { ENABLE_CACHE, SEARXNG_URL, REQUEST_TIMEOUT_MS, DEFAULT_MAX_CHARS, FETCH_CACHE_TTL_MS, SEARCH_CACHE_TTL_MS, RENDER_CACHE_TTL_MS, CODE_WEB_MAX_URLS, CODE_WEB_MAX_SNIPPETS, CODE_WEB_MAX_CHARS_PER_SNIPPET, CODE_WEB_CACHE_TTL_MS, CODE_WEB_PREFERRED_DOMAINS } from './config.js';
+import { ENABLE_CACHE, SEARXNG_URL, SEARXNG_ENGINES, SEARXNG_REQUEST_HEADERS, REQUEST_TIMEOUT_MS, DEFAULT_MAX_CHARS, FETCH_CACHE_TTL_MS, SEARCH_CACHE_TTL_MS, RENDER_CACHE_TTL_MS, CODE_WEB_MAX_URLS, CODE_WEB_MAX_SNIPPETS, CODE_WEB_MAX_CHARS_PER_SNIPPET, CODE_WEB_CACHE_TTL_MS, CODE_WEB_PREFERRED_DOMAINS } from './config.js';
 
 export function registerTools(server: McpServer) {
 server.registerTool(
@@ -29,9 +29,7 @@ server.registerTool(
       endpoint.searchParams.set("format", "json");
 
       const res = await fetch(endpoint, {
-        headers: {
-          Accept: "application/json"
-        },
+        headers: SEARXNG_REQUEST_HEADERS,
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
       });
 
@@ -102,7 +100,8 @@ server.registerTool(
       query,
       max_results,
       language: language || "",
-      time_range: time_range || ""
+      time_range: time_range || "",
+      engines: SEARXNG_ENGINES.join(",")
     });
 
     if (ENABLE_CACHE) {
@@ -131,10 +130,12 @@ server.registerTool(
       endpoint.searchParams.set("time_range", time_range);
     }
 
+    if (SEARXNG_ENGINES.length > 0) {
+      endpoint.searchParams.set("engines", SEARXNG_ENGINES.join(","));
+    }
+
     const response = await fetch(endpoint, {
-      headers: {
-        Accept: "application/json"
-      },
+      headers: SEARXNG_REQUEST_HEADERS,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
 
@@ -161,6 +162,7 @@ server.registerTool(
     const output = {
       query,
       backend: "searxng",
+      engines: SEARXNG_ENGINES,
       results: compact,
       note:
         "Use fetch_url for static pages. Use fetch_rendered_source or fetch_rendered_markdown for SPA pages.",
@@ -412,7 +414,7 @@ server.registerTool(
   async ({ query, max_snippets, language_hint }) => {
     const enhancedQueries = rewriteQueries(query);
 
-    const cacheKey = `search_code_web:${JSON.stringify({ query, enhancedQueries, max_snippets, language_hint: language_hint || "" })}`;
+    const cacheKey = `search_code_web:${JSON.stringify({ query, enhancedQueries, max_snippets, language_hint: language_hint || "", engines: SEARXNG_ENGINES })}`;
 
     if (ENABLE_CACHE) {
       const cached = getCache<any>(cacheKey);
@@ -424,7 +426,7 @@ server.registerTool(
     await Promise.allSettled(
       enhancedQueries.map(async (q) => {
         try {
-          const rs = await searxngSearch(q, 5);
+          const rs = await searxngSearch(q, 5, undefined, SEARXNG_ENGINES);
           for (const r of rs) {
             if (r.url) allResults.push(r);
           }
@@ -448,12 +450,18 @@ server.registerTool(
     }> = [];
 
     const concurrencyLimit = 4;
+    const PER_URL_TIMEOUT_MS = 12000; // cap each URL so the whole tool stays under MCP timeout
     for (let i = 0; i < urls.length; i += concurrencyLimit) {
       const batch = urls.slice(i, i + concurrencyLimit);
       await Promise.allSettled(
         batch.map(async (url) => {
           try {
-            const blocks = await fetchSnippetsFromUrl(url);
+            const blocks = await Promise.race([
+              fetchSnippetsFromUrl(url),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("per-url timeout")), PER_URL_TIMEOUT_MS)
+              )
+            ]);
             for (const b of blocks) {
               if (snippets.length >= CODE_WEB_MAX_SNIPPETS) continue;
 
@@ -486,6 +494,7 @@ server.registerTool(
 
     const output = {
       query,
+      engines: SEARXNG_ENGINES,
       urls_considered: urls.length,
       snippets_found: snippets.length,
       results: final,

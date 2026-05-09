@@ -1,16 +1,25 @@
-import { SEARXNG_URL, REQUEST_TIMEOUT_MS } from "./config.js";
+import { SEARXNG_URL, REQUEST_TIMEOUT_MS, SEARXNG_REQUEST_HEADERS } from "./config.js";
 
-export async function searxngSearch(query: string, maxResults: number, timeRange?: string): Promise<Array<{ title: string; url: string; snippet: string }>> {
+export async function searxngSearch(
+  query: string,
+  maxResults: number,
+  timeRange?: string,
+  engines?: string[]
+): Promise<Array<{ title: string; url: string; snippet: string }>> {
   const endpoint = new URL("/search", SEARXNG_URL);
   endpoint.searchParams.set("q", query);
   endpoint.searchParams.set("format", "json");
+
+  if (engines && engines.length > 0) {
+    endpoint.searchParams.set("engines", engines.join(","));
+  }
 
   if (timeRange) {
     endpoint.searchParams.set("time_range", timeRange);
   }
 
   const response = await fetch(endpoint, {
-    headers: { Accept: "application/json" },
+    headers: SEARXNG_REQUEST_HEADERS,
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
   });
 

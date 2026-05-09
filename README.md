@@ -369,6 +369,9 @@ Create `.env.example`:
 ```env
 SEARXNG_PORT=8080
 SEARXNG_URL=http://127.0.0.1:8080
+# Optional: restrict SearXNG queries to specific engines to reduce 403/CAPTCHA noise.
+# If empty, MCP falls back to: google,bing,wikipedia
+SEARXNG_ENGINES=
 
 REQUEST_TIMEOUT_MS=15000
 MAX_FETCH_BYTES=524288
@@ -919,6 +922,19 @@ Restart SearXNG:
 ```bash
 docker compose restart searxng
 ```
+
+### SearXNG logs many `403` / `Too many request` / `CAPTCHA` engine errors
+
+Some upstream engines rate-limit or CAPTCHA data-center/shared IPs aggressively.
+You can limit MCP queries to a smaller set of engines:
+
+```env
+SEARXNG_ENGINES=google,bing
+```
+
+Then restart MCP (or reconnect in LM Studio).
+
+If `SEARXNG_ENGINES` is not set, MCP automatically uses `google,bing,wikipedia`.
 
 ### Port 8080 is already in use
 
