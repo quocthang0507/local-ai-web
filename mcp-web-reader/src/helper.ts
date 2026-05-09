@@ -1,3 +1,7 @@
+import dns from "node:dns/promises";
+import net from "node:net";
+import { ALLOW_DOMAINS, DEBUG } from "./config.js";
+
 export function decodeBasicEntities(text: string): string {
   return text
 	.replaceAll("&nbsp;", " ")
@@ -73,4 +77,82 @@ export function isPrivateIPv6(ip: string): boolean {
   if (lower.startsWith("fe80")) return true;
 
   return false;
+}
+
+export function makeCacheKey(prefix: string, parts: Record<string, unknown>): string {
+  const normalized = Object.keys(parts)
+    .sort()
+    .map((key) => `${key}=${normalizeCacheInput(parts[key])}`)
+    .join("&");
+
+  return `${prefix}:${normalized}`;
+}
+
+export async function assertSafeUrl(rawUrl: string): Promise<URL> {
+  const url = new URL(rawUrl);
+
+  if (!["http:", "https:"].includes(url.protocol)) {
+    throw new Error("Only http/https URLs are allowed.");
+  }
+
+  if (url.port !== "" && url.port !== "80" && url.port !== "443") {
+    throw new Error("Only default ports (80, 443) are allowed.");
+  }
+
+  const hostname = url.hostname.toLowerCase();
+
+  if (hostname === "169.254.169.254") {
+    throw new Error("Metadata IPs are blocked.");
+  }
+
+  if (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname === "0.0.0.0"
+  ) {
+    throw new Error("Localhost URLs are blocked.");
+  }
+
+  if (ALLOW_DOMAINS.length > 0) {
+    const allowed = ALLOW_DOMAINS.some(
+      (d) => hostname === d || hostname.endsWith("." + d)
+    );
+
+    if (!allowed) {
+      throw new Error(`Domain not allowed: ${hostname}`);
+    }
+  }
+
+  const ipVersion = net.isIP(hostname);
+
+  if (ipVersion === 4 && isPrivateIPv4(hostname)) {
+    throw new Error("Private IPv4 URLs are blocked.");
+  }
+
+  if (ipVersion === 6 && isPrivateIPv6(hostname)) {
+    throw new Error("Private IPv6 URLs are blocked.");
+  }
+
+  const addresses = await dns.lookup(hostname, { all: true });
+
+  for (const addr of addresses) {
+    if (addr.family === 4 && isPrivateIPv4(addr.address)) {
+      throw new Error(`Resolved to blocked private IPv4: ${addr.address}`);
+    }
+
+    if (addr.family === 6 && isPrivateIPv6(addr.address)) {
+      throw new Error(`Resolved to blocked private IPv6: ${addr.address}`);
+    }
+  }
+
+  return url;
+}
+
+export async function isSafeRequestUrl(rawUrl: string): Promise<boolean> {
+  try {
+    await assertSafeUrl(rawUrl);
+    return true;
+  } catch {
+    return false;
+  }
 }

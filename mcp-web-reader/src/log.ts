@@ -1,8 +1,6 @@
-const DEBUG = process.env.DEBUG_LOCAL_WEB_READER === "1";
+import { DEBUG } from "./config.js";
 
-function debugLog(...args: unknown[]) {
+export function debugLog(...args: unknown[]) {
   if (!DEBUG) return;
   console.error("[local-web-reader]", ...args);
 }
-
-export { debugLog };

@@ -1,3 +1,6 @@
+import { fetchWithSafety, renderUrlToSource } from "./browser.js";
+import { htmlToMarkdown } from "./extract.js";
+
 export type WebCodeSnippet = {
   url: string;
   source: string;     // hostname
@@ -158,4 +161,43 @@ export function scoreSnippet(url: string, code: string, lang?: string): number {
 export function truncateCode(code: string, maxChars: number): string {
   if (code.length <= maxChars) return code;
   return code.slice(0, maxChars) + "\n/* …truncated… */";
+}
+
+export async function fetchSnippetsFromUrl(url: string): Promise<Array<{ lang?: string; code: string }>> {
+  const finalUrl = githubToRaw(url);
+
+  // 1) GitHub raw → treat entire response as code
+  if (isProbablyRawCodeUrl(finalUrl)) {
+    const fetched = await fetchWithSafety(finalUrl);
+    const code = fetched.body;
+    return code.trim() ? [{ code, lang: undefined }] : [];
+  }
+
+  // 2) For normal pages: use Playwright render to get real DOM
+  const rendered = await renderUrlToSource(finalUrl, {
+    includeText: false,
+    includeHtml: true,
+    maxTextChars: 1000,
+    maxHtmlChars: 200000,
+    waitMs: 2000,
+    scrollSteps: 2
+  });
+
+  const html = rendered.renderedHtml || "";
+  if (!html) return [];
+
+  // Convert to markdown (main content)
+  const extracted = htmlToMarkdown(html, rendered.finalUrl);
+  const md = extracted.markdown || "";
+
+  // Extract markdown fenced blocks first
+  const fenced = extractFencedCodeBlocks(md);
+
+  // Fallback: extract <pre><code> from HTML if markdown doesn’t contain fences
+  if (fenced.length === 0) {
+    const pre = extractPreCodeBlocksFromHtml(html);
+    return pre.map(code => ({ code, lang: undefined }));
+  }
+
+  return fenced;
 }

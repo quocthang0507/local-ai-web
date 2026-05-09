@@ -1,0 +1,35 @@
+export const SEARXNG_URL = process.env.SEARXNG_URL || "http://127.0.0.1:8080";
+
+export const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || "15000");
+export const MAX_FETCH_BYTES = Number(process.env.MAX_FETCH_BYTES || String(512 * 1024));
+export const DEFAULT_MAX_CHARS = Number(process.env.DEFAULT_MAX_CHARS || "12000");
+
+export const RENDER_NAV_TIMEOUT_MS = Number(process.env.RENDER_NAV_TIMEOUT_MS || "30000");
+export const RENDER_NETWORK_IDLE_TIMEOUT_MS = Number(process.env.RENDER_NETWORK_IDLE_TIMEOUT_MS || "10000");
+export const RENDER_EXTRA_WAIT_MS = Number(process.env.RENDER_EXTRA_WAIT_MS || "1500");
+export const RENDER_SCROLL_STEPS = Number(process.env.RENDER_SCROLL_STEPS || "3");
+export const RENDER_SCROLL_DELAY_MS = Number(process.env.RENDER_SCROLL_DELAY_MS || "800");
+
+export const ENABLE_CACHE = process.env.ENABLE_CACHE !== "0";
+export const SEARCH_CACHE_TTL_MS = Number(process.env.SEARCH_CACHE_TTL_MS || "300000");
+export const FETCH_CACHE_TTL_MS = Number(process.env.FETCH_CACHE_TTL_MS || "600000");
+export const RENDER_CACHE_TTL_MS = Number(process.env.RENDER_CACHE_TTL_MS || "600000");
+
+export const DEBUG = process.env.DEBUG_LOCAL_WEB_READER === "1";
+
+export const CODE_WEB_CACHE_TTL_MS = Number(process.env.CODE_WEB_CACHE_TTL_MS || "300000");
+export const CODE_WEB_MAX_URLS = Number(process.env.CODE_WEB_MAX_URLS || "8");
+export const CODE_WEB_MAX_SNIPPETS = Number(process.env.CODE_WEB_MAX_SNIPPETS || "20");
+export const CODE_WEB_MAX_CHARS_PER_SNIPPET = Number(process.env.CODE_WEB_MAX_CHARS_PER_SNIPPET || "3000");
+
+export const RENDER_BLOCK_RESOURCE_TYPES = new Set(
+  (process.env.RENDER_BLOCK_RESOURCE_TYPES || "image,media,font")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+);
+
+export const ALLOW_DOMAINS = (process.env.ALLOW_DOMAINS || "")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
