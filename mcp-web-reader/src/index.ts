@@ -12,6 +12,20 @@ import {
   cacheSize,
   cacheStats
 } from "./cache.js";
+import {
+  preferredDomains,
+  rewriteQueries,
+  filterUrls,
+  extractFencedCodeBlocks,
+  scoreSnippet,
+  truncateSnippet,
+  type WebCodeSnippet,
+  githubToRaw,
+  isProbablyRawCodeUrl,
+  extractPreCodeBlocksFromHtml,
+  truncateCode
+} from "./code_web.js";
+import { htmlToText, isPrivateIPv4, isPrivateIPv6, normalizeCacheInput, textResult } from "./helper.js";
 
 const SEARXNG_URL = process.env.SEARXNG_URL || "http://127.0.0.1:8080";
 
@@ -31,6 +45,11 @@ const FETCH_CACHE_TTL_MS = Number(process.env.FETCH_CACHE_TTL_MS || "600000");
 const RENDER_CACHE_TTL_MS = Number(process.env.RENDER_CACHE_TTL_MS || "600000");
 
 const DEBUG = process.env.DEBUG_LOCAL_WEB_READER === "1";
+
+const CODE_WEB_CACHE_TTL_MS = Number(process.env.CODE_WEB_CACHE_TTL_MS || "300000");
+const CODE_WEB_MAX_URLS = Number(process.env.CODE_WEB_MAX_URLS || "8");
+const CODE_WEB_MAX_SNIPPETS = Number(process.env.CODE_WEB_MAX_SNIPPETS || "20");
+const CODE_WEB_MAX_CHARS_PER_SNIPPET = Number(process.env.CODE_WEB_MAX_CHARS_PER_SNIPPET || "3000");
 
 const RENDER_BLOCK_RESOURCE_TYPES = new Set(
   (process.env.RENDER_BLOCK_RESOURCE_TYPES || "image,media,font")
@@ -56,24 +75,6 @@ function debugLog(...args: unknown[]) {
   console.error("[local-web-reader]", ...args);
 }
 
-function textResult(obj: unknown) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 2)
-      }
-    ]
-  };
-}
-
-function normalizeCacheInput(value: unknown): string {
-  if (value === undefined) return "";
-  if (value === null) return "null";
-  if (typeof value === "string") return value.trim();
-  return JSON.stringify(value);
-}
-
 function makeCacheKey(prefix: string, parts: Record<string, unknown>): string {
   const normalized = Object.keys(parts)
     .sort()
@@ -81,32 +82,6 @@ function makeCacheKey(prefix: string, parts: Record<string, unknown>): string {
     .join("&");
 
   return `${prefix}:${normalized}`;
-}
-
-function isPrivateIPv4(ip: string): boolean {
-  const parts = ip.split(".").map(Number);
-  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return true;
-
-  const [a, b] = parts;
-
-  if (a === 10) return true;
-  if (a === 127) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 169 && b === 254) return true;
-  if (a === 0) return true;
-
-  return false;
-}
-
-function isPrivateIPv6(ip: string): boolean {
-  const lower = ip.toLowerCase();
-
-  if (lower === "::1") return true;
-  if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
-  if (lower.startsWith("fe80")) return true;
-
-  return false;
 }
 
 async function assertSafeUrl(rawUrl: string): Promise<URL> {
@@ -226,39 +201,6 @@ async function fetchWithSafety(
     contentType,
     body
   };
-}
-
-function decodeBasicEntities(text: string): string {
-  return text
-    .replaceAll("&nbsp;", " ")
-    .replaceAll("&amp;", "&")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", "\"")
-    .replaceAll("&#39;", "'");
-}
-
-function htmlToText(html: string): string {
-  let s = html;
-
-  s = s.replace(/<script[\s\S]*?<\/script>/gi, " ");
-  s = s.replace(/<style[\s\S]*?<\/style>/gi, " ");
-  s = s.replace(/<noscript[\s\S]*?<\/noscript>/gi, " ");
-  s = s.replace(/<!--[\s\S]*?-->/g, " ");
-
-  s = s.replace(/<\/(p|div|section|article|header|footer|li|h1|h2|h3|h4|h5|h6)>/gi, "\n");
-  s = s.replace(/<br\s*\/?>/gi, "\n");
-
-  s = s.replace(/<[^>]+>/g, " ");
-  s = decodeBasicEntities(s);
-
-  s = s
-    .split("\n")
-    .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter(Boolean)
-    .join("\n");
-
-  return s;
 }
 
 async function autoScroll(page: Page, steps: number, delayMs: number): Promise<void> {
@@ -432,9 +374,72 @@ async function renderUrlToSource(
 
     return result;
   } finally {
-    await context.close().catch(() => {});
-    await browser.close().catch(() => {});
+    await context.close().catch(() => { });
+    await browser.close().catch(() => { });
   }
+}
+
+async function searxngSearch(query: string, maxResults: number): Promise<Array<{ title: string; url: string; snippet: string }>> {
+  const endpoint = new URL("/search", SEARXNG_URL);
+  endpoint.searchParams.set("q", query);
+  endpoint.searchParams.set("format", "json");
+
+  const response = await fetch(endpoint, {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+  });
+
+  if (!response.ok) {
+    throw new Error(`SearXNG error: HTTP ${response.status}`);
+  }
+
+  const data: any = await response.json();
+  const results = Array.isArray(data.results) ? data.results : [];
+
+  return results.slice(0, maxResults).map((r: any) => ({
+    title: r.title || "",
+    url: r.url || "",
+    snippet: r.content || ""
+  }));
+}
+
+async function fetchSnippetsFromUrl(url: string): Promise<Array<{ lang?: string; code: string }>> {
+  const finalUrl = githubToRaw(url);
+
+  // 1) GitHub raw → treat entire response as code
+  if (isProbablyRawCodeUrl(finalUrl)) {
+    const fetched = await fetchWithSafety(finalUrl);
+    const code = fetched.body;
+    return code.trim() ? [{ code, lang: undefined }] : [];
+  }
+
+  // 2) For normal pages: use Playwright render to get real DOM
+  const rendered = await renderUrlToSource(finalUrl, {
+    includeText: false,
+    includeHtml: true,
+    maxTextChars: 1000,
+    maxHtmlChars: 200000,
+    waitMs: 2000,
+    scrollSteps: 2
+  });
+
+  const html = rendered.renderedHtml || "";
+  if (!html) return [];
+
+  // Convert to markdown (main content)
+  const extracted = htmlToMarkdown(html, rendered.finalUrl);
+  const md = extracted.markdown || "";
+
+  // Extract markdown fenced blocks first
+  const fenced = extractFencedCodeBlocks(md);
+
+  // Fallback: extract <pre><code> from HTML if markdown doesn’t contain fences
+  if (fenced.length === 0) {
+    const pre = extractPreCodeBlocksFromHtml(html);
+    return pre.map(code => ({ code, lang: undefined }));
+  }
+
+  return fenced;
 }
 
 const server = new McpServer({
@@ -808,6 +813,121 @@ server.tool(
     if (ENABLE_CACHE) {
       setCache(cacheKey, output, RENDER_CACHE_TTL_MS);
     }
+
+    return textResult(output);
+  }
+);
+
+server.tool(
+  "search_code_web",
+  "Search code snippets from the internet (via SearXNG), fetch pages, extract code blocks, rank and return best snippets.",
+  {
+    query: z.string().min(1),
+    max_snippets: z.number().int().min(1).max(50).default(10),
+    language_hint: z.string().optional().describe("Optional: e.g. typescript, python, rust"),
+  },
+  async ({ query, max_snippets, language_hint }) => {
+    const queries = [
+      `${query} code example`,
+      `${query} implementation`,
+      `${query} github`,
+      `${query} stackoverflow`,
+    ];
+
+    // Use SearXNG search syntax:
+    // - !<engine/category> selects engine/category, chainable and inclusive [1](https://dev.to/dmitryzub/scrape-duckduckgo-organic-results-with-python-cb8)
+    // For reliability, also add site: filters.
+    const enhancedQueries = queries.flatMap(q => [
+      q,
+      `!ddg ${q}`,                  // engine selection via ! prefix [1](https://dev.to/dmitryzub/scrape-duckduckgo-organic-results-with-python-cb8)
+      `${q} site:github.com`,
+      `${q} site:stackoverflow.com`,
+    ]);
+
+    const cacheKey = `search_code_web:${JSON.stringify({ query, enhancedQueries, max_snippets, language_hint: language_hint || "" })}`;
+
+    if (ENABLE_CACHE) {
+      const cached = getCache<any>(cacheKey);
+      if (cached) return textResult({ ...cached, cache: { hit: true } });
+    }
+
+    // 1) Search via SearXNG API
+    const allResults: Array<{ title: string; url: string; snippet: string }> = [];
+    for (const q of enhancedQueries) {
+      try {
+        const rs = await searxngSearch(q, 5);
+        for (const r of rs) {
+          if (r.url) allResults.push(r);
+        }
+      } catch {
+        // ignore failed query
+      }
+    }
+
+    // Dedup URLs and keep a reasonable number to fetch
+    const seen = new Set<string>();
+    const urls: string[] = [];
+    for (const r of allResults) {
+      if (!r.url) continue;
+      if (seen.has(r.url)) continue;
+      seen.add(r.url);
+      urls.push(r.url);
+      if (urls.length >= CODE_WEB_MAX_URLS) break;
+    }
+
+    // 2) Fetch pages & extract snippets
+    const snippets: Array<{
+      url: string;
+      source: string;
+      lang?: string;
+      code: string;
+      score: number;
+    }> = [];
+
+    for (const url of urls) {
+      if (snippets.length >= CODE_WEB_MAX_SNIPPETS) break;
+
+      let blocks: Array<{ lang?: string; code: string }> = [];
+      try {
+        blocks = await fetchSnippetsFromUrl(url);
+      } catch {
+        continue;
+      }
+
+      for (const b of blocks) {
+        if (snippets.length >= CODE_WEB_MAX_SNIPPETS) break;
+
+        // optional strict language filter
+        if (language_hint && b.lang && b.lang.toLowerCase() !== language_hint.toLowerCase()) {
+          continue;
+        }
+
+        const code = truncateCode(b.code, CODE_WEB_MAX_CHARS_PER_SNIPPET);
+        const score = scoreSnippet(url, code, b.lang);
+
+        snippets.push({
+          url,
+          source: (() => { try { return new URL(url).hostname; } catch { return ""; } })(),
+          lang: b.lang,
+          code,
+          score
+        });
+      }
+    }
+
+    // 3) Rank and return top
+    snippets.sort((a, b) => b.score - a.score);
+    const final = snippets.slice(0, max_snippets);
+
+    const output = {
+      query,
+      urls_considered: urls.length,
+      snippets_found: snippets.length,
+      results: final,
+      cache: { hit: false, ttlMs: CODE_WEB_CACHE_TTL_MS }
+    };
+
+    if (ENABLE_CACHE) setCache(cacheKey, output, CODE_WEB_CACHE_TTL_MS);
 
     return textResult(output);
   }

@@ -2,13 +2,25 @@
 
 Local web search and web reading tools for local LLMs running in **LM Studio**.
 
-`local-ai-web` adds a small MCP server to LM Studio so your local model can:
+## `local-ai-web` adds a small MCP server to LM Studio so your local model can:
 
 - Search the web through a local SearXNG instance.
 - Read normal static HTML pages.
 - Render JavaScript-heavy SPA pages with Playwright Chromium.
 - Extract visible text, rendered HTML, and cleaned Markdown.
 - Block localhost/private-network requests to reduce SSRF risk.
+
+## Web Code Search (Internet)
+
+This project now supports **real-time code search from the Internet** via the `search_code_web` tool.
+
+It allows local LLMs (Qwen, Llama, etc.) to:
+- find real-world code examples from GitHub / StackOverflow / docs
+- extract working code snippets
+- reduce hallucination significantly
+
+👉 Works completely local + private (self-hosted SearXNG)
+``
 
 > This project is for local research and personal productivity. It does not bypass login pages, paywalls, CAPTCHA, or website access controls.
 
@@ -25,7 +37,9 @@ Local web search and web reading tools for local LLMs running in **LM Studio**.
 - [Set Up SearXNG](#set-up-searxng)
 - [Set Up MCP Server](#set-up-mcp-server)
 - [Configure LM Studio](#configure-lm-studio)
+- [Search code snippets](#search-code-snippets)
 - [Recommended System Prompt](#recommended-system-prompt)
+- [GitHub Raw Optimization](#github-raw-optimization)
 - [How to Use](#how-to-use)
 - [Development Workflow](#development-workflow)
 - [Troubleshooting](#troubleshooting)
@@ -38,29 +52,24 @@ Local web search and web reading tools for local LLMs running in **LM Studio**.
 
 ## Architecture
 
-```text
-User
-  ↓
-LM Studio
-  ↓ MCP stdio
-local-web-reader MCP server
-  ├─ health_check
-  ├─ search_web
-  │    ↓
-  │  SearXNG local Docker container
-  │
-  ├─ fetch_url
-  │    ↓
-  │  Static HTTP fetch
-  │
-  ├─ fetch_rendered_source
-  │    ↓
-  │  Playwright Chromium headless
-  │
-  └─ fetch_rendered_markdown
-       ↓
-     Playwright Chromium → rendered HTML → Readability → Markdown
-```
+The system uses a Retrieval-Augmented pipeline for code search:
+
+```mermaid
+flowchart TD
+    A[User Query] --> B[Query Rewriting]
+    B --> C[SearXNG Search]
+    C --> D[URL Filtering]
+    D --> E[Fetch Page]
+    E --> F[Code Extraction]
+    F --> G[Ranking]
+    G --> H[LLM Response]
+````
+
+This design ensures:
+
+*   ✅ up-to-date code retrieval
+*   ✅ reduced hallucination
+*   ✅ better real-world examples
 
 SearXNG runs in Docker. The MCP server runs locally with Node.js and is launched by LM Studio through `mcp.json`.
 
@@ -116,6 +125,14 @@ This is usually the best tool for LLM summarization.
 ### `clear_cache`
 
 Clears in-memory cache.
+
+### `search_code_web`
+
+  - Web code search
+  - multi-query search via SearXNG
+  - GitHub raw code extraction
+  - StackOverflow snippet extraction
+  - automatic ranking (best snippet first)
 
 ---
 
@@ -684,6 +701,54 @@ Restart LM Studio if the tools do not appear.
 
 ---
 
+## Search code snippets
+
+Search code snippets from the Internet and return the most relevant examples.
+
+### ✨ Features
+
+- Multi-query search
+- GitHub raw file extraction
+- StackOverflow code parsing
+- Automatic snippet ranking
+- Built-in caching
+
+### ⚙️ How it works
+
+1. Rewrite query
+2. Search multiple variations via SearXNG
+3. Filter high-quality sources:
+   - GitHub
+   - StackOverflow
+   - official docs
+4. Fetch content
+5. Extract code blocks
+6. Rank best snippets
+
+### 📦 Example
+
+Prompt:
+
+```text
+Use search\_code\_web to find "express jwt middleware example"
+````
+
+Output:
+
+```json
+{
+  "results": [
+    {
+      "url": "...",
+      "source": "github.com",
+      "code": "function auth(req, res, next) {...}"
+    }
+  ]
+}
+````
+
+---
+
 ## Recommended System Prompt
 
 ```text
@@ -705,6 +770,21 @@ Rules:
 7. Cite source URLs in the final answer.
 8. If search or fetch fails, explain the limitation instead of guessing.
 ```
+
+---
+
+## GitHub Raw Optimization
+
+GitHub links are automatically converted:
+
+```text
+<https://github.com/user/repo/blob/main/file.ts> → <https://raw.githubusercontent.com/user/repo/main/file.ts>
+```
+
+Benefits:
+- faster fetching
+- clean code (no HTML)
+- more reliable extraction
 
 ---
 
@@ -742,6 +822,11 @@ https://example.com
 Use fetch_rendered_markdown to read this page and summarize it with source URL:
 https://example.com
 ```
+
+### Code search
+
+- `express jwt middleware example`
+- `playwright intercept request javascript`
 
 ---
 
@@ -887,6 +972,10 @@ This project cannot reliably extract:
 - Paywalled content.
 - Canvas/WebGL-only text.
 - Content requiring complex user interaction.
+- Some websites block scraping
+- Dynamic sites may require rendering
+- Not all pages contain clean code blocks
+- GitHub directories / issues are ignored
 
 It does not bypass website access controls.
 
