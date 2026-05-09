@@ -5,11 +5,11 @@ import { ALLOW_DOMAINS, DEBUG } from "./config.js";
 export function decodeBasicEntities(text: string): string {
   return text
 	.replaceAll("&nbsp;", " ")
-	.replaceAll("&amp;", "&")
 	.replaceAll("&lt;", "<")
 	.replaceAll("&gt;", ">")
 	.replaceAll("&quot;", "\"")
-	.replaceAll("&#39;", "'");
+	.replaceAll("&#39;", "'")
+	.replaceAll("&amp;", "&");
 }
 
 export function htmlToText(html: string): string {
