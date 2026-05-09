@@ -291,9 +291,17 @@ local-ai-web/
 │  ├─ package.json
 │  ├─ tsconfig.json
 │  ├─ src/
-│  │  ├─ index.ts
-│  │  ├─ cache.ts
-│  │  └─ extract.ts
+│  │  ├─ index.ts          # Server entry point
+│  │  ├─ browser.ts        # Playwright browser management
+│  │  ├─ tools.ts          # MCP tool definitions & handlers
+│  │  ├─ searxng.ts        # SearXNG API client
+│  │  ├─ code_web.ts       # Code search & extraction logic
+│  │  ├─ cache.ts          # In-memory caching
+│  │  ├─ extract.ts        # HTML to Markdown/Text extraction
+│  │  ├─ config.ts         # Environment configuration
+│  │  ├─ helper.ts         # Utility functions
+│  │  ├─ security.ts       # SSRF & domain filtering
+│  │  └─ log.ts            # Logging utilities
 │  └─ scripts/
 │     ├─ print-mcp-config.js
 │     └─ verify.js

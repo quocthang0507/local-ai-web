@@ -2,9 +2,19 @@
   "mcpServers": {
     "local-web-reader": {
       "command": "node",
-      "args": ["/Users/YOUR_NAME/local-ai-web/mcp-web-reader/dist/index.js"],
+      "args": [
+        "/Users/YOUR_NAME/path/to/local-ai-web/mcp-web-reader/dist/index.js"
+      ],
       "env": {
-        "SEARXNG_URL": "http://127.0.0.1:8080"
+        "SEARXNG_URL": "http://127.0.0.1:8080",
+        "REQUEST_TIMEOUT_MS": "15000",
+        "DEFAULT_MAX_CHARS": "12000",
+        "RENDER_NAV_TIMEOUT_MS": "30000",
+        "RENDER_NETWORK_IDLE_TIMEOUT_MS": "10000",
+        "RENDER_EXTRA_WAIT_MS": "1500",
+        "RENDER_SCROLL_STEPS": "3",
+        "RENDER_SCROLL_DELAY_MS": "800",
+        "RENDER_BLOCK_RESOURCE_TYPES": "image,media,font"
       }
     }
   }
