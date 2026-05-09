@@ -95,11 +95,22 @@ export function detectLanguage(query: string): string | undefined {
   return undefined;
 }
 
+function hostMatchesDomain(hostname: string, domain: string): boolean {
+  return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
 export function scoreDomain(url: string): number {
-  if (url.includes("github.com")) return 5;
-  if (url.includes("stackoverflow.com")) return 4;
-  if (url.includes("stackexchange.com")) return 4;
-  if (url.includes("docs") || url.includes("developer")) return 3;
+  const lowerUrl = url.toLowerCase();
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    if (hostMatchesDomain(hostname, "github.com")) return 5;
+    if (hostMatchesDomain(hostname, "stackoverflow.com")) return 4;
+    if (hostMatchesDomain(hostname, "stackexchange.com")) return 4;
+  } catch {
+    // Keep heuristic fallback behavior for malformed/non-absolute URLs.
+  }
+
+  if (lowerUrl.includes("docs") || lowerUrl.includes("developer")) return 3;
   return 1;
 }
 
