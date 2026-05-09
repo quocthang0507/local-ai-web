@@ -1,6 +1,7 @@
 import { fetchWithSafety, renderUrlToSource } from "./browser.js";
 import { htmlToMarkdown } from "./extract.js";
 import { decodeBasicEntities } from "./helper.js";
+import * as cheerio from "cheerio";
 
 export type WebCodeSnippet = {
   url: string;
@@ -74,17 +75,19 @@ export function extractPreCodeBlocksFromHtml(html: string): string[] {
   const re1 = /<pre[^>]*>\s*<code[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi;
   let m: RegExpExecArray | null;
   while ((m = re1.exec(html))) {
-    const code = decodeBasicEntities((m[1] || "").replace(/<[^>]+>/g, "")).trim();
+    const $ = cheerio.load(m[1] || "");
+    const code = decodeBasicEntities($.text()).trim();
     if (code && code.length >= 20 && code.length <= 10000) blocks.push(code);
   }
 
   if (blocks.length > 0) return blocks;
 
   // Pattern 2: bare <pre>...</pre> (GitHub syntax-highlighted <span>, many blogs)
-  // Strip inner HTML tags to recover plain code text.
+  // Parse inner HTML and recover plain text safely.
   const re2 = /<pre[^>]*>([\s\S]*?)<\/pre>/gi;
   while ((m = re2.exec(html))) {
-    const code = decodeBasicEntities((m[1] || "").replace(/<[^>]+>/g, "")).trim();
+    const $ = cheerio.load(m[1] || "");
+    const code = decodeBasicEntities($.text()).trim();
     if (code && code.length >= 20 && code.length <= 10000) blocks.push(code);
   }
 
