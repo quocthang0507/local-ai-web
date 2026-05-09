@@ -139,14 +139,18 @@ export function isProbablyRawCodeUrl(url: string): boolean {
   return url.startsWith("https://raw.githubusercontent.com/");
 }
 
+function isHostOrSubdomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
 export function scoreSnippet(url: string, code: string, lang?: string): number {
   let score = 0;
 
   const host = (() => { try { return new URL(url).hostname.toLowerCase(); } catch { return ""; } })();
 
-  if (host.includes("github.com") || host.includes("raw.githubusercontent.com")) score += 5;
-  if (host.includes("stackoverflow.com") || host.includes("stackexchange.com")) score += 4;
-  if (host.includes("developer.mozilla.org") || host.includes("learn.microsoft.com") || host.startsWith("docs.")) score += 3;
+  if (isHostOrSubdomain(host, "github.com") || isHostOrSubdomain(host, "raw.githubusercontent.com")) score += 5;
+  if (isHostOrSubdomain(host, "stackoverflow.com") || isHostOrSubdomain(host, "stackexchange.com")) score += 4;
+  if (isHostOrSubdomain(host, "developer.mozilla.org") || isHostOrSubdomain(host, "learn.microsoft.com") || host.startsWith("docs.")) score += 3;
 
   const lines = code.split(/\r?\n/).length;
   if (lines >= 5 && lines <= 80) score += 3;
