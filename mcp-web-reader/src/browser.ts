@@ -29,6 +29,7 @@ export async function fetchWithSafety(
   finalUrl: string;
   contentType: string;
   body: string;
+  buffer: ArrayBuffer;
 }> {
   const url = await assertSafeUrl(rawUrl);
 
@@ -37,7 +38,7 @@ export async function fetchWithSafety(
     redirect: "manual",
     headers: {
       "User-Agent": "Mozilla/5.0 (compatible; LMStudioLocalWebReader/1.0; +local)",
-      "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.5"
+      "Accept": "text/html,application/xhtml+xml,text/plain,application/pdf;q=0.9,*/*;q=0.5"
     },
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
   });
@@ -64,19 +65,25 @@ export async function fetchWithSafety(
   if (
     !contentType.includes("text/html") &&
     !contentType.includes("text/plain") &&
-    !contentType.includes("application/xhtml+xml")
+    !contentType.includes("application/xhtml+xml") &&
+    !contentType.includes("application/pdf")
   ) {
     throw new Error(`Unsupported content-type: ${contentType}`);
   }
 
   const arrayBuffer = await response.arrayBuffer();
   const bytes = new Uint8Array(arrayBuffer).slice(0, MAX_FETCH_BYTES);
-  const body = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  
+  let body = "";
+  if (!contentType.includes("application/pdf")) {
+    body = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+  }
 
   return {
     finalUrl: url.toString(),
     contentType,
-    body
+    body,
+    buffer: arrayBuffer
   };
 }
 

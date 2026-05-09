@@ -8,6 +8,8 @@ import { getGlobalBrowser, closeGlobalBrowser, fetchWithSafety, renderUrlToSourc
 import { searxngSearch } from './searxng.js';
 import { fetchSnippetsFromUrl, scoreSnippet, truncateCode, rewriteQueries, filterUrls } from './code_web.js';
 import { ENABLE_CACHE, SEARXNG_URL, SEARXNG_ENGINES, SEARXNG_REQUEST_HEADERS, REQUEST_TIMEOUT_MS, DEFAULT_MAX_CHARS, FETCH_CACHE_TTL_MS, SEARCH_CACHE_TTL_MS, RENDER_CACHE_TTL_MS, CODE_WEB_MAX_URLS, CODE_WEB_MAX_SNIPPETS, CODE_WEB_MAX_CHARS_PER_SNIPPET, CODE_WEB_CACHE_TTL_MS, CODE_WEB_PREFERRED_DOMAINS } from './config.js';
+import { PDFParse } from 'pdf-parse';
+import { extractTables, extractMetadata } from './structured.js';
 
 export function registerTools(server: McpServer) {
 server.registerTool(
@@ -118,66 +120,70 @@ server.registerTool(
       }
     }
 
-    const endpoint = new URL("/search", SEARXNG_URL);
-    endpoint.searchParams.set("q", query);
-    endpoint.searchParams.set("format", "json");
+    try {
+      const endpoint = new URL("/search", SEARXNG_URL);
+      endpoint.searchParams.set("q", query);
+      endpoint.searchParams.set("format", "json");
 
-    if (language) {
-      endpoint.searchParams.set("language", language);
-    }
-
-    if (time_range) {
-      endpoint.searchParams.set("time_range", time_range);
-    }
-
-    if (SEARXNG_ENGINES.length > 0) {
-      endpoint.searchParams.set("engines", SEARXNG_ENGINES.join(","));
-    }
-
-    const response = await fetch(endpoint, {
-      headers: SEARXNG_REQUEST_HEADERS,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-    });
-
-    if (!response.ok) {
-      throw new Error(`SearXNG error: HTTP ${response.status}`);
-    }
-
-    const data: any = await response.json();
-    const results = Array.isArray(data.results) ? data.results : [];
-
-    const compact = results.slice(0, max_results).map((r: any) => ({
-      title: r.title || "",
-      url: r.url || "",
-      snippet: r.content || "",
-      source: (() => {
-        try {
-          return new URL(r.url).hostname;
-        } catch {
-          return "";
-        }
-      })()
-    }));
-
-    const output = {
-      query,
-      backend: "searxng",
-      engines: SEARXNG_ENGINES,
-      results: compact,
-      note:
-        "Use fetch_url for static pages. Use fetch_rendered_source or fetch_rendered_markdown for SPA pages.",
-      cache: {
-        hit: false,
-        key: cacheKey,
-        ttlMs: SEARCH_CACHE_TTL_MS
+      if (language) {
+        endpoint.searchParams.set("language", language);
       }
-    };
 
-    if (ENABLE_CACHE) {
-      setCache(cacheKey, output, SEARCH_CACHE_TTL_MS);
+      if (time_range) {
+        endpoint.searchParams.set("time_range", time_range);
+      }
+
+      if (SEARXNG_ENGINES.length > 0) {
+        endpoint.searchParams.set("engines", SEARXNG_ENGINES.join(","));
+      }
+
+      const response = await fetch(endpoint, {
+        headers: SEARXNG_REQUEST_HEADERS,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      });
+
+      if (!response.ok) {
+        return textResult({ error: `SearXNG error: HTTP ${response.status}` });
+      }
+
+      const data: any = await response.json();
+      const results = Array.isArray(data.results) ? data.results : [];
+
+      const compact = results.slice(0, max_results).map((r: any) => ({
+        title: r.title || "",
+        url: r.url || "",
+        snippet: r.content || "",
+        source: (() => {
+          try {
+            return new URL(r.url).hostname;
+          } catch {
+            return "";
+          }
+        })()
+      }));
+
+      const output = {
+        query,
+        backend: "searxng",
+        engines: SEARXNG_ENGINES,
+        results: compact,
+        note:
+          "Use fetch_url for static pages. Use fetch_rendered_source or fetch_rendered_markdown for SPA pages.",
+        cache: {
+          hit: false,
+          key: cacheKey,
+          ttlMs: SEARCH_CACHE_TTL_MS
+        }
+      };
+
+      if (ENABLE_CACHE) {
+        setCache(cacheKey, output, SEARCH_CACHE_TTL_MS);
+      }
+
+      return textResult(output);
+    } catch (err: any) {
+      return textResult({ error: `search_web failed: ${err?.message || String(err)}` });
     }
-
-    return textResult(output);
   }
 );
 
@@ -212,29 +218,33 @@ server.registerTool(
       }
     }
 
-    const fetched = await fetchWithSafety(url);
-    const text = htmlToText(fetched.body).slice(0, max_chars);
+    try {
+      const fetched = await fetchWithSafety(url);
+      const text = htmlToText(fetched.body).slice(0, max_chars);
 
-    const output = {
-      mode: "static_fetch",
-      requestedUrl: url,
-      finalUrl: fetched.finalUrl,
-      contentType: fetched.contentType,
-      text,
-      safety:
-        "Private/local network URLs are blocked. Content is truncated before sending to the model.",
-      cache: {
-        hit: false,
-        key: cacheKey,
-        ttlMs: FETCH_CACHE_TTL_MS
+      const output = {
+        mode: "static_fetch",
+        requestedUrl: url,
+        finalUrl: fetched.finalUrl,
+        contentType: fetched.contentType,
+        text,
+        safety:
+          "Private/local network URLs are blocked. Content is truncated before sending to the model.",
+        cache: {
+          hit: false,
+          key: cacheKey,
+          ttlMs: FETCH_CACHE_TTL_MS
+        }
+      };
+
+      if (ENABLE_CACHE) {
+        setCache(cacheKey, output, FETCH_CACHE_TTL_MS);
       }
-    };
 
-    if (ENABLE_CACHE) {
-      setCache(cacheKey, output, FETCH_CACHE_TTL_MS);
+      return textResult(output);
+    } catch (err: any) {
+      return textResult({ error: `fetch_url failed: ${err?.message || String(err)}` });
     }
-
-    return textResult(output);
   }
 );
 
@@ -295,32 +305,36 @@ server.registerTool(
       }
     }
 
-    const rendered = await renderUrlToSource(url, {
-      includeText: include_text,
-      includeHtml: include_html,
-      maxTextChars: max_text_chars,
-      maxHtmlChars: max_html_chars,
-      waitMs: wait_ms,
-      scrollSteps: scroll_steps
-    });
+    try {
+      const rendered = await renderUrlToSource(url, {
+        includeText: include_text,
+        includeHtml: include_html,
+        maxTextChars: max_text_chars,
+        maxHtmlChars: max_html_chars,
+        waitMs: wait_ms,
+        scrollSteps: scroll_steps
+      });
 
-    const output = {
-      mode: "rendered_source",
-      ...rendered,
-      safety:
-        "Rendered with headless Chromium. Local/private network requests are blocked. Images/media/fonts are blocked by default. Output is truncated before sending to the model.",
-      cache: {
-        hit: false,
-        key: cacheKey,
-        ttlMs: RENDER_CACHE_TTL_MS
+      const output = {
+        mode: "rendered_source",
+        ...rendered,
+        safety:
+          "Rendered with headless Chromium. Local/private network requests are blocked. Images/media/fonts are blocked by default. Output is truncated before sending to the model.",
+        cache: {
+          hit: false,
+          key: cacheKey,
+          ttlMs: RENDER_CACHE_TTL_MS
+        }
+      };
+
+      if (ENABLE_CACHE) {
+        setCache(cacheKey, output, RENDER_CACHE_TTL_MS);
       }
-    };
 
-    if (ENABLE_CACHE) {
-      setCache(cacheKey, output, RENDER_CACHE_TTL_MS);
+      return textResult(output);
+    } catch (err: any) {
+      return textResult({ error: `fetch_rendered_source failed: ${err?.message || String(err)}` });
     }
-
-    return textResult(output);
   }
 );
 
@@ -364,40 +378,44 @@ server.registerTool(
       }
     }
 
-    const rendered = await renderUrlToSource(url, {
-      includeText: false,
-      includeHtml: true,
-      maxTextChars: 1000,
-      maxHtmlChars: 200000,
-      waitMs: wait_ms,
-      scrollSteps: scroll_steps
-    });
+    try {
+      const rendered = await renderUrlToSource(url, {
+        includeText: false,
+        includeHtml: true,
+        maxTextChars: 1000,
+        maxHtmlChars: 200000,
+        waitMs: wait_ms,
+        scrollSteps: scroll_steps
+      });
 
-    const extracted = htmlToMarkdown(rendered.renderedHtml || "", rendered.finalUrl);
+      const extracted = htmlToMarkdown(rendered.renderedHtml || "", rendered.finalUrl);
 
-    const output = {
-      mode: "rendered_markdown",
-      requestedUrl: rendered.requestedUrl,
-      finalUrl: rendered.finalUrl,
-      title: extracted.title || rendered.title,
-      excerpt: extracted.excerpt,
-      byline: extracted.byline,
-      markdown: extracted.markdown.slice(0, max_chars),
-      requestReport: rendered.requestReport,
-      safety:
-        "Rendered with headless Chromium. Private/local network requests are blocked. Markdown is truncated before sending to the model.",
-      cache: {
-        hit: false,
-        key: cacheKey,
-        ttlMs: RENDER_CACHE_TTL_MS
+      const output = {
+        mode: "rendered_markdown",
+        requestedUrl: rendered.requestedUrl,
+        finalUrl: rendered.finalUrl,
+        title: extracted.title || rendered.title,
+        excerpt: extracted.excerpt,
+        byline: extracted.byline,
+        markdown: extracted.markdown.slice(0, max_chars),
+        requestReport: rendered.requestReport,
+        safety:
+          "Rendered with headless Chromium. Private/local network requests are blocked. Markdown is truncated before sending to the model.",
+        cache: {
+          hit: false,
+          key: cacheKey,
+          ttlMs: RENDER_CACHE_TTL_MS
+        }
+      };
+
+      if (ENABLE_CACHE) {
+        setCache(cacheKey, output, RENDER_CACHE_TTL_MS);
       }
-    };
 
-    if (ENABLE_CACHE) {
-      setCache(cacheKey, output, RENDER_CACHE_TTL_MS);
+      return textResult(output);
+    } catch (err: any) {
+      return textResult({ error: `fetch_rendered_markdown failed: ${err?.message || String(err)}` });
     }
-
-    return textResult(output);
   }
 );
 
@@ -504,6 +522,125 @@ server.registerTool(
     if (ENABLE_CACHE) setCache(cacheKey, output, CODE_WEB_CACHE_TTL_MS);
 
     return textResult(output);
+  }
+);
+
+server.registerTool(
+  "fetch_document",
+  {
+    description: "Fetch and extract text from a PDF or other supported document URL. SSRF protected.",
+    inputSchema: {
+      url: z.string().url().describe("URL to the document (e.g. .pdf)"),
+      max_chars: z.number().int().min(1000).max(80000).default(DEFAULT_MAX_CHARS)
+    }
+  },
+  async ({ url, max_chars }) => {
+    debugLog("fetch_document", { url, max_chars });
+
+    const cacheKey = makeCacheKey("fetch_document", { url, max_chars });
+
+    if (ENABLE_CACHE) {
+      const cached = getCache<any>(cacheKey);
+      if (cached) return textResult({ ...cached, cache: { hit: true } });
+    }
+
+    try {
+      const fetched = await fetchWithSafety(url);
+
+      if (fetched.contentType.includes("application/pdf")) {
+        const parser = new PDFParse({ data: fetched.buffer });
+        const textData = await parser.getText();
+        const info = await parser.getInfo();
+
+        const output = {
+          mode: "pdf_extraction",
+          requestedUrl: url,
+          finalUrl: fetched.finalUrl,
+          numPages: textData.pages.length,
+          metadata: info.metadata,
+          info: info.info,
+          text: textData.text.slice(0, max_chars),
+          safety: "Content is truncated before sending to the model.",
+          cache: { hit: false, ttlMs: FETCH_CACHE_TTL_MS }
+        };
+        if (ENABLE_CACHE) setCache(cacheKey, output, FETCH_CACHE_TTL_MS);
+        return textResult(output);
+      }
+
+      return textResult({
+        error: `Unsupported document content-type: ${fetched.contentType}. Use fetch_url for HTML/text.`
+      });
+    } catch (err: any) {
+      return textResult({ error: `fetch_document failed: ${err?.message || String(err)}` });
+    }
+  }
+);
+
+server.registerTool(
+  "extract_structured_data",
+  {
+    description: "Extract tables (as Markdown) and JSON-LD metadata from a URL.",
+    inputSchema: {
+      url: z.string().url().describe("URL to extract from"),
+      render: z.boolean().default(false).describe("If true, use Playwright to render JS before extraction"),
+      max_table_chars: z.number().int().min(1000).max(80000).default(DEFAULT_MAX_CHARS)
+    }
+  },
+  async ({ url, render, max_table_chars }) => {
+    debugLog("extract_structured_data", { url, render, max_table_chars });
+
+    const cacheKey = makeCacheKey("extract_structured_data", { url, render, max_table_chars });
+
+    if (ENABLE_CACHE) {
+      const cached = getCache<any>(cacheKey);
+      if (cached) return textResult({ ...cached, cache: { hit: true } });
+    }
+
+    try {
+      let html = "";
+      let finalUrl = url;
+
+      if (render) {
+        const rendered = await renderUrlToSource(url, {
+          includeHtml: true,
+          includeText: false,
+          maxHtmlChars: 500000,
+          maxTextChars: 1000
+        });
+        html = rendered.renderedHtml || "";
+        finalUrl = rendered.finalUrl;
+      } else {
+        const fetched = await fetchWithSafety(url);
+        html = fetched.body;
+        finalUrl = fetched.finalUrl;
+      }
+
+      const allTables = extractTables(html);
+      const metadata = extractMetadata(html);
+
+      const truncatedTables = [];
+      let currentChars = 0;
+      for (const t of allTables) {
+        if (currentChars + t.length > max_table_chars) break;
+        truncatedTables.push(t);
+        currentChars += t.length;
+      }
+
+      const output = {
+        requestedUrl: url,
+        finalUrl,
+        tables: truncatedTables,
+        metadata,
+        safety: "Content is truncated before sending to the model.",
+        cache: { hit: false, ttlMs: FETCH_CACHE_TTL_MS }
+      };
+
+      if (ENABLE_CACHE) setCache(cacheKey, output, FETCH_CACHE_TTL_MS);
+
+      return textResult(output);
+    } catch (err: any) {
+      return textResult({ error: `extract_structured_data failed: ${err?.message || String(err)}` });
+    }
   }
 );
 

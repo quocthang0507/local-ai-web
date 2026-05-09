@@ -53,7 +53,13 @@ async function runTests() {
                 data = { errorString: textContent };
             }
 
-            if (expectedKey && data[expectedKey] === undefined && data.errorString === undefined) {
+            if (expectedKey && expectedKey !== 'expect_error' && data[expectedKey] === undefined) {
+                if (data.error) {
+                    throw new Error(`Tool returned internal error: ${data.error}`);
+                }
+                if (data.errorString) {
+                    throw new Error(`Tool returned error string: ${data.errorString}`);
+                }
                 throw new Error(`Expected key '${expectedKey}' missing from response`);
             }
 
@@ -63,14 +69,14 @@ async function runTests() {
                     passed++;
                     return data;
                 } else {
-                    throw new Error(`Tool returned error: ${textContent}`);
+                    throw new Error(`Tool returned isError flag: ${textContent}`);
                 }
             }
 
             if (expectedKey === 'expect_error' && !result.isError) {
                 // If it didn't return isError but the string says error, we also accept it
-                if (data.errorString) {
-                    console.log(`✅ [${duration}ms] Passed (Got expected error string)`);
+                if (data.errorString || data.error) {
+                    console.log(`✅ [${duration}ms] Passed (Got expected error string/json)`);
                     passed++;
                     return data;
                 }
@@ -113,8 +119,18 @@ async function runTests() {
     }, 15000, "results");
 
     // 3. Static Fetching
-    await runTest("Fetch URL (Static)", "fetch_url", {
+    await runTest("Fetch URL (Static - Example)", "fetch_url", {
         url: "https://example.com",
+        max_chars: 2000
+    }, 15000, "text");
+
+    await runTest("Fetch URL (Static - Hacker News)", "fetch_url", {
+        url: "https://news.ycombinator.com/",
+        max_chars: 5000
+    }, 15000, "text");
+
+    await runTest("Fetch URL (Static - GitHub Raw JSON)", "fetch_url", {
+        url: "https://raw.githubusercontent.com/npm/cli/latest/package.json",
         max_chars: 2000
     }, 15000, "text");
 
@@ -127,11 +143,19 @@ async function runTests() {
     }, 15000, "expect_error"); // SSRF block check
 
     // 4. Rendered Fetching
-    await runTest("Fetch Rendered Source", "fetch_rendered_source", {
+    await runTest("Fetch Rendered Source (Example)", "fetch_rendered_source", {
         url: "https://example.com",
         include_text: true,
         include_html: false,
         max_text_chars: 1000
+    }, 45000, "text");
+
+    await runTest("Fetch Rendered Source (React.dev SPA)", "fetch_rendered_source", {
+        url: "https://react.dev/",
+        include_text: true,
+        include_html: false,
+        max_text_chars: 2000,
+        wait_ms: 2000
     }, 45000, "text");
 
     await runTest("Fetch Rendered Source with Scrolling (SPA)", "fetch_rendered_source", {
@@ -143,10 +167,16 @@ async function runTests() {
         wait_ms: 1000
     }, 45000, "renderedHtml");
 
-    await runTest("Fetch Rendered Markdown", "fetch_rendered_markdown", {
+    await runTest("Fetch Rendered Markdown (Example)", "fetch_rendered_markdown", {
         url: "https://example.com",
         max_chars: 1000,
         wait_ms: 500
+    }, 45000, "markdown");
+
+    await runTest("Fetch Rendered Markdown (GitHub Docs)", "fetch_rendered_markdown", {
+        url: "https://docs.github.com/en",
+        max_chars: 2000,
+        wait_ms: 1000
     }, 45000, "markdown");
 
     // 5. Code Web Search
@@ -161,13 +191,28 @@ async function runTests() {
         max_snippets: 2
     }, 60000, "results");
 
-    // 6. Cache Check & Clear
+    // 6. PDF & Structured Data Extraction
+    await runTest("Fetch Document (PDF)", "fetch_document", {
+        url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+    }, 30000, "text");
+
+    await runTest("Extract Structured Data (Tables)", "extract_structured_data", {
+        url: "https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes",
+        render: false
+    }, 30000, "tables");
+
+    await runTest("Extract Structured Data (Rendered Tables)", "extract_structured_data", {
+        url: "https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes",
+        render: true
+    }, 45000, "tables");
+
+    // 7. Cache Check & Clear
     await runTest("Cache Stats (After runs)", "cache_stats", {}, 5000, "entries");
     await runTest("Clear Cache", "clear_cache", {}, 5000, "clearedEntries");
     await runTest("Cache Stats (After clear)", "cache_stats", {}, 5000, "entries");
 
     // 7. Cleanup
-    await runTest("Close Browser", "close_browser", {}, 10000, "content");
+    await runTest("Close Browser", "close_browser", {}, 10000, null);
 
     // --- SUMMARY --- //
     console.log(`\n================================`);
