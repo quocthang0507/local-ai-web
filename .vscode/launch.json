@@ -1,0 +1,34 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Build Project (npm run build)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/mcp-web-reader",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "build"
+      ],
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Serve API (npm run serve:api)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/mcp-web-reader",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "serve:api"
+      ],
+      "console": "integratedTerminal",
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "Swagger UI available at (https?://\\S+)",
+        "uriFormat": "%s"
+      }
+    }
+  ]
+}

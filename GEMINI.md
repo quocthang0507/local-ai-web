@@ -32,7 +32,10 @@ The following GitHub security features are enabled for this repository and must 
 - **Test**: `npm test` runs a standalone test client to verify tool responses.
 - **Mandatory Feature Workflow**: When adding new tools or features, you MUST:
   1. Add corresponding integration tests targeting real-world URLs in `mcp-web-reader/test_mcp.js`.
-  2. Update `README.md` to document the new feature, including its description in the "Features" list, any modifications to the "Project Structure" or "Recommended System Prompt", and specific "How to Use" example prompts.
+  2. Update documentation across relevant files:
+     - `README.md`: Update the "Features" list and "Project Structure" if applicable.
+     - `SETUP.md`: Update configuration steps if the new feature requires new environment variables or setup steps.
+     - `USAGE.md`: Add a description, "How to Use" example prompts, and update the "Recommended System Prompt" if applicable.
 
 ## Future Roadmap (High Priority)
 - [ ] **Visual Feedback**: Add `capture_screenshot` tool to Playwright browser.

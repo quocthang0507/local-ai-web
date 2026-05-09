@@ -7,6 +7,7 @@
     "build": "tsc",
     "build:watch": "tsc --watch",
     "start": "node dist/index.js",
+    "serve:api": "node dist/http.js",
     "print:mcp": "node scripts/print-mcp-config.js",
     "verify": "node scripts/verify.js",
     "test": "node test_mcp.js"
@@ -15,20 +16,26 @@
     "@modelcontextprotocol/sdk": "1.29.0",
     "@mozilla/readability": "^0.6.0",
     "cheerio": "^1.2.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "html-to-text": "^10.0.0",
     "jsdom": "^29.1.1",
     "pdf-parse": "^2.4.5",
     "playwright": "^1.59.1",
     "playwright-extra": "^4.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "swagger-ui-express": "^5.0.1",
     "turndown": "^7.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/html-to-text": "^9.0.4",
     "@types/jsdom": "^28.0.1",
     "@types/node": "^25.6.2",
     "@types/pdf-parse": "^1.1.5",
+    "@types/swagger-ui-express": "^4.1.8",
     "@types/turndown": "^5.0.5",
     "typescript": "^6.0.3"
   }
