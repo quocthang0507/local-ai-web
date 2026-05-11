@@ -135,7 +135,6 @@ export function githubToRaw(url: string): string {
     // Support for gist.github.com
     if (u.hostname === "gist.github.com") {
       const parts = u.pathname.split("/").filter(Boolean);
-      // format: /user/id or just /id
       if (parts.length >= 2) {
         return `https://gist.githubusercontent.com/${parts[0]}/${parts[1]}/raw`;
       } else if (parts.length === 1) {
@@ -147,14 +146,14 @@ export function githubToRaw(url: string): string {
     // Support for github.com
     if (u.hostname !== "github.com") return url;
 
-    const parts = u.pathname.split("/");
+    const parts = u.pathname.split("/").filter(Boolean);
 
     // format: /user/repo/blob/branch/path or /user/repo/raw/branch/path
-    if (parts.length > 5 && (parts[3] === "blob" || parts[3] === "raw")) {
-      const user = parts[1];
-      const repo = parts[2];
-      const branch = parts[4];
-      const filePath = parts.slice(5).join("/");
+    if (parts.length >= 4 && (parts[2] === "blob" || parts[2] === "raw")) {
+      const user = parts[0];
+      const repo = parts[1];
+      const branch = parts[3];
+      const filePath = parts.slice(4).join("/");
 
       return `https://raw.githubusercontent.com/${user}/${repo}/${branch}/${filePath}`;
     }
@@ -162,6 +161,38 @@ export function githubToRaw(url: string): string {
     return url;
   } catch {
     return url;
+  }
+}
+
+export function isGitHubRepoUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.hostname !== "github.com") return false;
+    const parts = u.pathname.split("/").filter(Boolean);
+    // /user/repo or /user/repo/tree/branch/path
+    return parts.length === 2 || (parts.length >= 3 && parts[2] === "tree");
+  } catch {
+    return false;
+  }
+}
+
+export function isGitHubFileUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.hostname !== "github.com") return false;
+    const parts = u.pathname.split("/").filter(Boolean);
+    return parts.length >= 4 && (parts[2] === "blob" || parts[2] === "raw");
+  } catch {
+    return false;
+  }
+}
+
+export function isGistUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.hostname === "gist.github.com";
+  } catch {
+    return false;
   }
 }
 

@@ -142,6 +142,17 @@ async function runTests() {
         url: "http://169.254.169.254/latest/meta-data/",
     }, 15000, "expect_error"); // SSRF block check
 
+    // 3.5 Markdown Fetching
+    await runTest("Fetch Markdown (Static - Hacker News)", "fetch_markdown", {
+        url: "https://news.ycombinator.com/",
+        max_chars: 10000
+    }, 15000, "markdown");
+
+    await runTest("Fetch Markdown (Static - Wikipedia)", "fetch_markdown", {
+        url: "https://en.wikipedia.org/wiki/Model_Context_Protocol",
+        max_chars: 20000
+    }, 20000, "markdown");
+
     // 4. Rendered Fetching
     await runTest("Fetch Rendered Source (Example)", "fetch_rendered_source", {
         url: "https://example.com",

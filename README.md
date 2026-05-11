@@ -87,13 +87,21 @@ Searches the web through local SearXNG and returns compact results. Supports tim
 
 ### `fetch_url`
 
-Fetches normal static HTML or plain text pages.
+Fetches normal static HTML or plain text pages as plain text. Automatically converts GitHub/Gist file URLs to raw content for clean code reading.
+
+### `fetch_markdown`
+
+Fetches static HTML pages and returns cleaned, well-formatted **Markdown**. Automatically converts GitHub/Gist file URLs to raw content and wraps them in code blocks.
 
 Use this for:
 
-- Static documentation pages.
-- Server-rendered blogs.
-- Simple HTML pages.
+- Reading blog articles or documentation.
+- Getting high-quality content without boilerplate (headers, footers, ads).
+- Preserving tables and formatting via GFM (GitHub Flavored Markdown).
+
+### `list_github_repo`
+
+Lists files and directories in a GitHub repository or subdirectory. Useful for exploring repository structures before reading specific files.
 
 ### `fetch_rendered_source`
 
@@ -378,7 +386,7 @@ This project cannot reliably extract:
 - Some websites block scraping
 - Dynamic sites may require rendering
 - Not all pages contain clean code blocks
-- GitHub directories / issues are ignored
+- GitHub issues are ignored
 
 It does not bypass website access controls.
 

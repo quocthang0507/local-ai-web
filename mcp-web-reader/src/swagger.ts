@@ -59,7 +59,7 @@ export const swaggerDocument = {
     "/api/search": {
       post: {
         summary: "Search Web",
-        description: "Search the web using local SearXNG. Returns title, url, snippet, and source.",
+        description: "Search the web using local SearXNG. Best for general queries, news, or site discovery.",
         requestBody: {
           required: true,
           content: {
@@ -72,7 +72,12 @@ export const swaggerDocument = {
                   language: { type: "string" },
                   time_range: { type: "string", enum: ["day", "week", "month", "year"] }
                 },
-                required: ["query"]
+                required: ["query"],
+                example: {
+                  query: "latest news on MCP protocol",
+                  max_results: 3,
+                  time_range: "week"
+                }
               }
             }
           }
@@ -85,7 +90,7 @@ export const swaggerDocument = {
     "/api/fetch/static": {
       post: {
         summary: "Fetch URL",
-        description: "Fetch and extract readable text from static HTML/text URL.",
+        description: "Fetch and extract readable text from a URL. Automatically handles GitHub/Gist file URLs by fetching the raw source.",
         requestBody: {
           required: true,
           content: {
@@ -96,7 +101,11 @@ export const swaggerDocument = {
                   url: { type: "string" },
                   max_chars: { type: "integer", default: 12000 }
                 },
-                required: ["url"]
+                required: ["url"],
+                example: {
+                  url: "https://github.com/google/mcp-sdk-typescript/blob/main/README.md",
+                  max_chars: 5000
+                }
               }
             }
           }
@@ -125,7 +134,12 @@ export const swaggerDocument = {
                   wait_ms: { type: "integer" },
                   scroll_steps: { type: "integer" }
                 },
-                required: ["url"]
+                required: ["url"],
+                example: {
+                  url: "https://app.example.com/dashboard",
+                  wait_ms: 2000,
+                  scroll_steps: 2
+                }
               }
             }
           }
@@ -151,7 +165,11 @@ export const swaggerDocument = {
                   wait_ms: { type: "integer" },
                   scroll_steps: { type: "integer" }
                 },
-                required: ["url"]
+                required: ["url"],
+                example: {
+                  url: "https://www.reddit.com/r/LocalLLaMA/",
+                  max_chars: 10000
+                }
               }
             }
           }
@@ -175,7 +193,10 @@ export const swaggerDocument = {
                   url: { type: "string" },
                   max_chars: { type: "integer", default: 12000 }
                 },
-                required: ["url"]
+                required: ["url"],
+                example: {
+                  url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+                }
               }
             }
           }
@@ -188,7 +209,7 @@ export const swaggerDocument = {
     "/api/extract/structured": {
       post: {
         summary: "Extract Structured Data",
-        description: "Extract tables (as Markdown) and JSON-LD metadata from a URL.",
+        description: "Extract HTML tables (as Markdown) and JSON-LD metadata from a URL.",
         requestBody: {
           required: true,
           content: {
@@ -200,7 +221,37 @@ export const swaggerDocument = {
                   render: { type: "boolean", default: false },
                   max_table_chars: { type: "integer", default: 12000 }
                 },
-                required: ["url"]
+                required: ["url"],
+                example: {
+                  url: "https://en.wikipedia.org/wiki/Comparison_of_relational_database_management_systems",
+                  max_table_chars: 20000
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "200": { description: "Successful response" }
+        }
+      }
+    },
+    "/api/list/github": {
+      post: {
+        summary: "List GitHub Repository",
+        description: "List files and directories in a GitHub repository or subdirectory.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  url: { type: "string" }
+                },
+                required: ["url"],
+                example: {
+                  url: "https://github.com/google/mcp-sdk-typescript"
+                }
               }
             }
           }
@@ -213,7 +264,7 @@ export const swaggerDocument = {
     "/api/search/code": {
       post: {
         summary: "Search Code Web",
-        description: "Search code snippets from the internet (via SearXNG), fetch pages, extract code blocks, rank and return best snippets.",
+        description: "Search for code snippets, implementations, and examples across the web (GitHub, StackOverflow, docs).",
         requestBody: {
           required: true,
           content: {
@@ -225,7 +276,11 @@ export const swaggerDocument = {
                   max_snippets: { type: "integer", default: 10 },
                   language_hint: { type: "string" }
                 },
-                required: ["query"]
+                required: ["query"],
+                example: {
+                  query: "Express JWT middleware example",
+                  language_hint: "javascript"
+                }
               }
             }
           }

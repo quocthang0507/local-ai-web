@@ -23,6 +23,6 @@ engines:
   - name: brave
     disabled: true
   - name: duckduckgo
-    disabled: true
+    disabled: false
   - name: startpage
     disabled: true

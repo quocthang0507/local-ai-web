@@ -8,9 +8,10 @@ import { SEARXNG_URL, ENABLE_CACHE, SEARXNG_REQUEST_HEADERS, REQUEST_TIMEOUT_MS,
 import { makeCacheKey, htmlToText } from "./helper.js";
 import { htmlToMarkdown } from "./extract.js";
 import { extractTables, extractMetadata } from "./structured.js";
-import { rewriteQueries, filterUrls, fetchSnippetsFromUrl, truncateCode, scoreSnippet } from "./code_web.js";
+import { rewriteQueries, filterUrls, fetchSnippetsFromUrl, truncateCode, scoreSnippet, githubToRaw, isGitHubRepoUrl, isGitHubFileUrl, isGistUrl } from "./code_web.js";
 import { searxngSearch } from "./searxng.js";
 import { PDFParse } from "pdf-parse";
+import * as cheerio from "cheerio";
 
 const app = express();
 const port = process.env.API_PORT || 3000;
@@ -120,15 +121,21 @@ app.post("/api/fetch/static", async (req, res) => {
   const { url, max_chars = 12000 } = req.body;
   if (!url) return res.status(400).json({ error: "url is required" });
 
-  const cacheKey = makeCacheKey("fetch_url", { url, max_chars });
+  const finalUrl = githubToRaw(url);
+  const cacheKey = makeCacheKey("fetch_url", { url: finalUrl, max_chars });
   if (ENABLE_CACHE) {
     const cached = getCache<any>(cacheKey);
     if (cached) return res.json({ ...cached, cache: { hit: true, key: cacheKey } });
   }
 
   try {
-    const fetched = await fetchWithSafety(url);
-    const text = htmlToText(fetched.body).slice(0, max_chars);
+    const fetched = await fetchWithSafety(finalUrl);
+    let text = "";
+    if (isGitHubFileUrl(url) || isGistUrl(url)) {
+      text = fetched.body.slice(0, max_chars);
+    } else {
+      text = htmlToText(fetched.body).slice(0, max_chars);
+    }
     const output = { mode: "static_fetch", requestedUrl: url, finalUrl: fetched.finalUrl, contentType: fetched.contentType, text, cache: { hit: false, key: cacheKey, ttlMs: FETCH_CACHE_TTL_MS } };
     if (ENABLE_CACHE) setCache(cacheKey, output, FETCH_CACHE_TTL_MS);
     res.json(output);
@@ -242,6 +249,61 @@ app.post("/api/extract/structured", async (req, res) => {
     res.json(output);
   } catch (err: any) {
     res.status(500).json({ error: `extract_structured_data failed: ${err?.message || String(err)}` });
+  }
+});
+
+app.post("/api/list/github", async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: "url is required" });
+
+  if (!isGitHubRepoUrl(url)) {
+    return res.status(400).json({ error: "Invalid GitHub repository or tree URL." });
+  }
+
+  const cacheKey = makeCacheKey("list_github_repo", { url });
+  if (ENABLE_CACHE) {
+    const cached = getCache<any>(cacheKey);
+    if (cached) return res.json({ ...cached, cache: { hit: true } });
+  }
+
+  try {
+    const rendered = await renderUrlToSource(url, { includeHtml: true, includeText: false, maxHtmlChars: 500000, maxTextChars: 1000, waitMs: 1000 });
+    const $ = cheerio.load(rendered.renderedHtml || "");
+    const items: Array<any> = [];
+
+    $('div[role="row"]').each((_, row) => {
+      const link = $(row).find('a[href*="/blob/"], a[href*="/tree/"]').first();
+      if (link.length) {
+        const href = link.attr('href') || "";
+        const name = link.text().trim();
+        const type = href.includes("/blob/") ? 'file' : 'directory';
+        const fullUrl = new URL(href, "https://github.com").toString();
+        if (name && name !== ".." && !name.includes("Permalink")) {
+          items.push({ name, type, url: fullUrl });
+        }
+      }
+    });
+
+    if (items.length === 0) {
+      $('.js-navigation-item').each((_, item) => {
+        const link = $(item).find('.js-navigation-open').first();
+        if (link.length) {
+          const href = link.attr('href') || "";
+          const name = link.text().trim();
+          const type = href.includes("/blob/") ? 'file' : 'directory';
+          const fullUrl = new URL(href, "https://github.com").toString();
+          if (name && name !== ".." && !items.find(i => i.name === name)) {
+            items.push({ name, type, url: fullUrl });
+          }
+        }
+      });
+    }
+
+    const output = { url, finalUrl: rendered.finalUrl, repo: url.split('/').slice(0, 5).join('/'), items, cache: { hit: false, key: cacheKey, ttlMs: FETCH_CACHE_TTL_MS } };
+    if (ENABLE_CACHE) setCache(cacheKey, output, FETCH_CACHE_TTL_MS);
+    res.json(output);
+  } catch (err: any) {
+    res.status(500).json({ error: `list_github_repo failed: ${err?.message || String(err)}` });
   }
 });
 
