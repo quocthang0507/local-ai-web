@@ -4,6 +4,7 @@ use_default_settings:
       - ahmia
       - torch
       - wikidata
+      - radio browser
 
 server:
   secret_key: "this-is-a-long-random-string-for-ai-configuration"

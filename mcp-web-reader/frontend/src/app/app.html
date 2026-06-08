@@ -1,0 +1,40 @@
+<header class="topbar">
+  <a class="brand" routerLink="/">
+    <span class="brand-mark">AI</span>
+    <span>Local AI Search</span>
+  </a>
+  <nav class="top-actions" aria-label="Điều hướng">
+    <a class="icon-link" routerLink="/translate" title="Dịch thuật">
+      <svg><use href="#icon-globe"></use></svg>
+      <span>Dịch thuật</span>
+    </a>
+    <a class="icon-link" href="/docs" target="_blank" title="Swagger API">
+      <svg><use href="#icon-file"></use></svg>
+      <span>API</span>
+    </a>
+    <app-health-pill></app-health-pill>
+  </nav>
+</header>
+
+<main class="app-shell">
+  <router-outlet></router-outlet>
+</main>
+
+<footer class="app-footer">
+  <div class="footer-container">
+    <div class="footer-left">
+      <p>&copy; 2026 <strong>Local AI Web Search</strong>. Bảo mật & Hoàn toàn Ngoại tuyến.</p>
+    </div>
+    <div class="footer-right">
+      <a href="https://github.com/quocthang0507/local-ai-web" target="_blank" rel="noreferrer" title="GitHub Repository">
+        <svg class="footer-icon"><use href="#icon-code"></use></svg>
+        <span>GitHub</span>
+      </a>
+      <span class="separator">·</span>
+      <a href="/docs" target="_blank" title="Swagger API Documentation">
+        <svg class="footer-icon"><use href="#icon-file"></use></svg>
+        <span>Swagger API</span>
+      </a>
+    </div>
+  </div>
+</footer>

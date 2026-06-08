@@ -79,7 +79,7 @@ export const TRANSLATE_TIMEOUT_MS = Number(process.env.TRANSLATE_TIMEOUT_MS || "
 export const TRANSLATE_MAX_CHARS = Number(process.env.TRANSLATE_MAX_CHARS || "8000");
 
 export const TRANSLATE_PROVIDERS = (
-  process.env.TRANSLATE_PROVIDERS || "google,mymemory,duckduckgo"
+  process.env.TRANSLATE_PROVIDERS || "google,mymemory,duckduckgo,lingva"
 )
   .split(",")
   .map((s) => s.trim().toLowerCase())

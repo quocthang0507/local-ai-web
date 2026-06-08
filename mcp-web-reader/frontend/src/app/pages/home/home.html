@@ -1,0 +1,87 @@
+<div class="hero-container">
+  <div class="hero-brand">
+    <div class="hero-logo">
+      <span class="hero-logo-mark">AI</span>
+    </div>
+    <h1 class="hero-title">Local AI Web Search</h1>
+    <p class="hero-subtitle">Tìm kiếm thông minh & đọc nội dung trực tiếp trên thiết bị của bạn</p>
+  </div>
+
+  <section class="hero-search-band" aria-label="Tìm kiếm">
+    <form class="search-form" (submit)="onSearch($event)">
+      <!-- Tabbed modes above the search box for clear visual choice -->
+      <div class="hero-mode-tabs" role="tablist" aria-label="Loại tìm kiếm">
+        <button class="hero-mode-tab" [class.active]="mode() === 'web'" type="button" (click)="setMode('web')">
+          <svg><use href="#icon-globe"></use></svg>
+          <span>Web</span>
+        </button>
+        <button class="hero-mode-tab" [class.active]="mode() === 'code'" type="button" (click)="setMode('code')">
+          <svg><use href="#icon-code"></use></svg>
+          <span>Mã nguồn</span>
+        </button>
+        <button class="hero-mode-tab" [class.active]="mode() === 'legal'" type="button" (click)="setMode('legal')">
+          <svg><use href="#icon-scale"></use></svg>
+          <span>Văn bản pháp luật</span>
+        </button>
+        <button class="hero-mode-tab" [class.active]="mode() === 'procedure'" type="button" (click)="setMode('procedure')">
+          <svg><use href="#icon-file"></use></svg>
+          <span>Thủ tục hành chính</span>
+        </button>
+        <button class="hero-mode-tab" [class.active]="mode() === 'pdf'" type="button" (click)="setMode('pdf')">
+          <svg><use href="#icon-file"></use></svg>
+          <span>PDF</span>
+        </button>
+        <button class="hero-mode-tab" type="button" (click)="setMode('translate')">
+          <svg><use href="#icon-globe"></use></svg>
+          <span>Dịch thuật</span>
+        </button>
+      </div>
+
+      <div class="hero-search-box-wrapper">
+        <div class="hero-search-box">
+          <svg class="search-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+          <input
+            id="queryInput"
+            name="query"
+            type="search"
+            [(ngModel)]="query"
+            autocomplete="off"
+            spellcheck="false"
+            [placeholder]="placeholder()"
+          />
+          <button class="hero-primary-button" type="submit">
+            <svg><use href="#icon-search"></use></svg>
+            <span>Tìm kiếm</span>
+          </button>
+        </div>
+        <!-- Background glow/hover highlight elements -->
+        <div class="search-box-glow"></div>
+      </div>
+
+      <div class="hero-filter-row">
+        <label *ngIf="mode() === 'web' || mode() === 'legal' || mode() === 'procedure'">
+          <span>Thời gian</span>
+          <select name="timeRange" [(ngModel)]="timeRange">
+            <option value="">Mọi thời điểm</option>
+            <option value="day">24 giờ</option>
+            <option value="week">7 ngày</option>
+            <option value="month">30 ngày</option>
+            <option value="year">1 năm</option>
+          </select>
+        </label>
+        <label>
+          <span>Số kết quả</span>
+          <select name="maxResults" [(ngModel)]="maxResults">
+            <option [value]="5">5</option>
+            <option [value]="8">8</option>
+            <option [value]="10">10</option>
+          </select>
+        </label>
+        <label class="hero-check-filter" *ngIf="mode() === 'legal' || mode() === 'procedure'">
+          <input name="includeUnofficial" type="checkbox" [(ngModel)]="includeUnofficial" />
+          <span>Thêm nguồn tham khảo</span>
+        </label>
+      </div>
+    </form>
+  </section>
+</div>

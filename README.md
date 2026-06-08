@@ -45,6 +45,7 @@ Supported providers:
 - `google`: uses an unofficial Google Translate endpoint.
 - `mymemory`: uses the public MyMemory translation API.
 - `duckduckgo`: experimental best-effort DuckDuckGo Instant Answer lookup. It often does not return translations and is mostly a fallback.
+- `lingva`: uses the public Lingva Translate API (privacy-focused Google Translate proxy).
 
 Do not send secrets or sensitive personal data to external translation providers.
 
@@ -205,15 +206,22 @@ Use this for:
 
 Includes a standalone Express server providing REST APIs and a Swagger UI for executing all web search and reading features independently of LM Studio.
 
-### Web Search App
+### Angular SPA Web App
 
-Includes a browser UI served by the same Express server. Start SearXNG, run the API server, then open:
+Includes a modern Single Page Application (SPA) web frontend built using **Angular** and styled with **Pico.css v2** for clean, responsive, semantic aesthetics. It is served by the same Express server.
+
+To access the web app, run the container stack or start the local API server and open:
 
 ```text
 http://localhost:3000
 ```
 
-The web app provides a search-engine style interface with modes for `Web`, `Mã nguồn`, `Văn bản pháp luật`, `Thủ tục hành chính`, and `PDF`. Swagger remains available at:
+The app features:
+- **Search modes**: Tabbed search interface for `Web`, `Mã nguồn` (Code), `Văn bản pháp luật` (Legal Documents), `Thủ tục hành chính` (Administrative Procedures), and `PDF`.
+- **Integrated Translation**: A dedicated translation page supporting multiple free translation APIs (including Google Translate, MyMemory, and Lingva Translate) with a persistent translation history log saved in your browser.
+- **Optimized UI**: Responsive dual-pane layout showing results and detailed previews cleanly side-by-side.
+
+Swagger remains available at:
 
 ```text
 http://localhost:3000/docs
@@ -267,13 +275,14 @@ local-ai-web/
 ├─ SECURITY.md
 ├─ .env.example
 ├─ .gitignore
-├─ docker-compose.yml
+├─ docker-compose.yml      # Starts SearXNG + mcp-web-reader together
 ├─ searxng/
 │  └─ config/
 │     └─ settings.yml
 ├─ mcp-web-reader/
 │  ├─ package.json
 │  ├─ tsconfig.json
+│  ├─ Dockerfile           # Multi-stage Docker image
 │  ├─ src/
 │  │  ├─ index.ts          # Server entry point
 │  │  ├─ browser.ts        # Playwright browser management
@@ -291,7 +300,8 @@ local-ai-web/
 │  │  ├─ log.ts            # Logging utilities
 │  │  ├─ http.ts           # Standalone API Server
 │  │  └─ swagger.ts        # OpenAPI Specification
-│  ├─ public/              # Browser web app
+│  ├─ public/              # Compiled static Angular SPA assets
+│  ├─ frontend/            # Angular SPA source project folder
 │  └─ scripts/
 │     ├─ print-mcp-config.js
 │     └─ verify.js
@@ -339,11 +349,25 @@ Stop SearXNG:
 docker compose down
 ```
 
-Rebuild MCP after code changes:
+Rebuild MCP after backend changes:
 
 ```bash
 cd mcp-web-reader
 npm run build
+```
+
+Rebuild Angular frontend SPA:
+
+```bash
+cd mcp-web-reader/frontend
+npm run build
+```
+
+Run Angular frontend in dev mode (runs server on port 4200, proxies requests to port 3000):
+
+```bash
+cd mcp-web-reader/frontend
+npm start
 ```
 
 Watch TypeScript changes:

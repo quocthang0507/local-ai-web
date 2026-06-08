@@ -483,6 +483,121 @@ app.post("/api/context/vietnam-legal", async (req, res) => {
   }
 });
 
+// Helper function to render a beautiful HTML error page for server-side issues
+function renderServerError(statusCode: number, title: string, message: string): string {
+  return `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>${statusCode} - ${title}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #f7f8fa;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      color: #172033;
+    }
+    .error-card {
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+      padding: 40px 32px;
+      background: #ffffff;
+      border: 1px solid #d8dee8;
+      border-radius: 12px;
+      box-shadow: 0 18px 45px rgba(39, 50, 72, 0.08);
+    }
+    .error-code {
+      font-size: 72px;
+      font-weight: 800;
+      color: #be123c;
+      line-height: 1;
+      margin: 0 0 16px 0;
+    }
+    .error-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0 0 12px 0;
+    }
+    .error-message {
+      font-size: 15px;
+      color: #647083;
+      line-height: 1.6;
+      margin: 0 0 28px 0;
+    }
+    .home-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 20px;
+      border-radius: 8px;
+      background: #2563eb;
+      color: #ffffff;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      border: 0;
+      transition: background 0.2s ease;
+    }
+    .home-btn:hover {
+      background: #1d4ed8;
+      color: #ffffff;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="error-card">
+    <div class="error-code">${statusCode}</div>
+    <h1 class="error-title">${title}</h1>
+    <p class="error-message">${message}</p>
+    <a href="/" class="home-btn">Quay lại Trang chủ</a>
+  </div>
+</body>
+</html>`;
+}
+
+// Fallback for unmatched API routes
+app.use("/api", (req, res) => {
+  res.status(404).json({ error: "API endpoint không tồn tại hoặc phương thức không hợp lệ." });
+});
+
+// Define list of valid Angular frontend client routes
+const validClientRoutes = ["/", "/results", "/translate", "/error"];
+
+// Fallback to index.html for Angular SPA client-side routing, or return 404 for unknown routes/assets
+app.get("*splat", (req, res) => {
+  const hasExtension = path.extname(req.path) !== "";
+  const cleanPath = req.path.replace(/\/$/, "") || "/";
+
+  if (hasExtension) {
+    res.status(404).send(renderServerError(404, "Không tìm thấy tài nguyên", `Tài nguyên tĩnh '${req.path}' không tồn tại trên máy chủ.`));
+  } else if (validClientRoutes.includes(cleanPath)) {
+    res.sendFile(path.join(publicDir, "index.html"));
+  } else {
+    res.status(404).send(renderServerError(404, "Không tìm thấy trang", `Đường dẫn '${req.path}' không tồn tại hoặc đã bị di chuyển.`));
+  }
+});
+
+// Global Error Handler Middleware
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Internal Server Error:", err);
+  const statusCode = err.status || err.statusCode || 500;
+  const title = statusCode === 404 ? "Không Tìm Thấy" : "Lỗi Máy Chủ Nội Bộ";
+  const message = err.message || "Đã xảy ra lỗi không xác định trên máy chủ.";
+
+  if (req.originalUrl.startsWith("/api/")) {
+    return res.status(statusCode).json({ error: message });
+  }
+  res.status(statusCode).send(renderServerError(statusCode, title, message));
+});
+
 app.listen(port, () => {
   console.log(`Web app available at http://localhost:${port}`);
   console.log(`API Server listening at http://localhost:${port}`);

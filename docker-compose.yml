@@ -5,8 +5,23 @@ services:
     ports:
       - "127.0.0.1:${SEARXNG_PORT:-8080}:8080"
     volumes:
-      - ./searxng/config:/etc/searxng
+      - ./searxng/config/settings.yml:/etc/searxng/settings.yml:ro
+      - ./searxng/config/limiter.toml:/etc/searxng/limiter.toml:ro
     environment:
       - SEARXNG_BASE_URL=http://127.0.0.1:${SEARXNG_PORT:-8080}/
       - INSTANCE_NAME=local-searxng
+    restart: unless-stopped
+
+  web-reader:
+    build:
+      context: .
+      dockerfile: mcp-web-reader/Dockerfile
+    container_name: mcp-web-reader
+    ports:
+      - "3000:3000"
+    environment:
+      - SEARXNG_URL=http://searxng:8080
+      - API_PORT=3000
+    depends_on:
+      - searxng
     restart: unless-stopped

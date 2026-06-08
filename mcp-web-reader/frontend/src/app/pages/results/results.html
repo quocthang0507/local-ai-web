@@ -1,0 +1,197 @@
+<!-- Search Refinement Header -->
+<section class="search-band" aria-label="Tìm kiếm" style="margin-bottom: 20px;">
+  <form class="search-form" (submit)="triggerSearch($event)">
+    <div class="search-box">
+      <svg class="search-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+      <input
+        id="queryInput"
+        name="query"
+        type="search"
+        [(ngModel)]="query"
+        autocomplete="off"
+        spellcheck="false"
+        [placeholder]="placeholder"
+      />
+      <button class="primary-button" type="submit" [disabled]="loading()">
+        <svg><use href="#icon-search"></use></svg>
+        <span>Tìm</span>
+      </button>
+    </div>
+
+    <div class="mode-tabs" role="tablist" aria-label="Loại tìm kiếm">
+      <button class="mode-tab" [class.active]="mode() === 'web'" type="button" (click)="setMode('web')">
+        <svg><use href="#icon-globe"></use></svg>
+        <span>Web</span>
+      </button>
+      <button class="mode-tab" [class.active]="mode() === 'code'" type="button" (click)="setMode('code')">
+        <svg><use href="#icon-code"></use></svg>
+        <span>Mã nguồn</span>
+      </button>
+      <button class="mode-tab" [class.active]="mode() === 'legal'" type="button" (click)="setMode('legal')">
+        <svg><use href="#icon-scale"></use></svg>
+        <span>Văn bản pháp luật</span>
+      </button>
+      <button class="mode-tab" [class.active]="mode() === 'procedure'" type="button" (click)="setMode('procedure')">
+        <svg><use href="#icon-file"></use></svg>
+        <span>Thủ tục hành chính</span>
+      </button>
+      <button class="mode-tab" [class.active]="mode() === 'pdf'" type="button" (click)="setMode('pdf')">
+        <svg><use href="#icon-file"></use></svg>
+        <span>PDF</span>
+      </button>
+      <button class="mode-tab" type="button" (click)="setMode('translate')">
+        <svg><use href="#icon-globe"></use></svg>
+        <span>Dịch thuật</span>
+      </button>
+    </div>
+
+    <div class="filter-row">
+      <label *ngIf="mode() === 'web' || mode() === 'legal' || mode() === 'procedure'">
+        <span>Thời gian</span>
+        <select name="timeRange" [(ngModel)]="timeRange" (change)="triggerSearch()">
+          <option value="">Mọi thời điểm</option>
+          <option value="day">24 giờ</option>
+          <option value="week">7 ngày</option>
+          <option value="month">30 ngày</option>
+          <option value="year">1 năm</option>
+        </select>
+      </label>
+      <label>
+        <span>Số kết quả</span>
+        <select name="maxResults" [(ngModel)]="maxResults" (change)="triggerSearch()">
+          <option [value]="5">5</option>
+          <option [value]="8">8</option>
+          <option [value]="10">10</option>
+        </select>
+      </label>
+      <label class="check-filter" *ngIf="mode() === 'legal' || mode() === 'procedure'">
+        <input name="includeUnofficial" type="checkbox" [(ngModel)]="includeUnofficial" (change)="triggerSearch()" />
+        <span>Thêm nguồn tham khảo</span>
+      </label>
+    </div>
+  </form>
+</section>
+
+<!-- Main Workspace (Split Pane) -->
+<div class="workspace">
+  <!-- Left Side: Results List -->
+  <section class="results-pane" aria-label="Kết quả tìm kiếm">
+    <div class="pane-head">
+      <h1>Kết quả</h1>
+      <span id="resultCount">{{ results().length }}</span>
+    </div>
+
+    <div class="results-list">
+      <!-- Loading State -->
+      <div class="loading-state" *ngIf="loading()">
+        <div class="spinner"></div>
+        <h2>Đang tìm kiếm...</h2>
+        <p>Hệ thống đang tải dữ liệu cho bạn.</p>
+      </div>
+
+      <!-- Error State -->
+      <div class="error-state" *ngIf="!loading() && error()">
+        <svg><use href="#icon-file"></use></svg>
+        <h2>Tìm kiếm thất bại</h2>
+        <p>{{ error() }}</p>
+      </div>
+
+      <!-- Empty State -->
+      <div class="empty-results" *ngIf="!loading() && !error() && results().length === 0">
+        <svg><use href="#icon-search"></use></svg>
+        <h2>Không có kết quả</h2>
+        <p>Không tìm thấy kết quả phù hợp cho từ khóa của bạn.</p>
+      </div>
+
+      <!-- Hits list -->
+      <ng-container *ngIf="!loading() && !error() && results().length > 0">
+        <button
+          *ngFor="let result of results(); let idx = index"
+          type="button"
+          class="result-item"
+          [class.active]="idx === activeIndex()"
+          (click)="selectResult(idx)"
+        >
+          <h2 class="result-title">{{ result.title }}</h2>
+          <div class="result-url">{{ formatUrl(result.url) }}</div>
+          <p class="result-snippet">{{ result.snippet | slice:0:220 }}{{ (result.snippet && result.snippet.length > 220) ? '…' : '' }}</p>
+          <div class="tag-row">
+            <span class="tag" style="text-transform: capitalize;">{{ result.mode }}</span>
+            <span class="tag code" *ngIf="result.lang">{{ result.lang }}</span>
+            <span class="tag official" *ngIf="result.sourceTier === 'official'">Chính thức</span>
+            <span class="tag warn" *ngIf="result.sourceTier === 'reference'">Tham khảo</span>
+            <span class="tag" *ngIf="result.score !== undefined">Điểm {{ result.score | number:'1.0-0' }}</span>
+          </div>
+        </button>
+      </ng-container>
+    </div>
+  </section>
+
+  <!-- Right Side: Details View -->
+  <aside class="detail-pane" aria-label="Nội dung kết quả">
+    <!-- Empty Detail state -->
+    <div class="empty-detail" *ngIf="!detailLoading() && !detailError() && !detailData()">
+      <svg><use href="#icon-search"></use></svg>
+      <h2>Chọn một kết quả</h2>
+      <p>Nội dung chi tiết sẽ hiển thị tại đây.</p>
+    </div>
+
+    <!-- Detail Loading -->
+    <div class="loading-state" *ngIf="detailLoading()">
+      <div class="spinner"></div>
+      <h2>Đang tải nội dung...</h2>
+      <p>Vui lòng đợi giây lát.</p>
+    </div>
+
+    <!-- Detail Error -->
+    <div class="error-state" *ngIf="!detailLoading() && detailError()">
+      <svg><use href="#icon-file"></use></svg>
+      <h2>Không tải được nội dung</h2>
+      <p>{{ detailError() }}</p>
+    </div>
+
+    <!-- Detail Content -->
+    <div class="detail-content" *ngIf="!detailLoading() && !detailError() && detailData()">
+      <div class="detail-kicker">{{ detailData().kicker }}</div>
+      <h2 class="detail-title">{{ detailData().title }}</h2>
+
+      <!-- External URL Link -->
+      <a class="detail-url" *ngIf="detailData().url" [href]="detailData().url" target="_blank" rel="noreferrer">
+        <svg><use href="#icon-open"></use></svg>
+        <span>{{ formatUrl(detailData().url) }}</span>
+      </a>
+
+      <!-- Tags row -->
+      <div class="tag-row" *ngIf="detailData().tags?.length">
+        <span
+          *ngFor="let tag of detailData().tags"
+          class="tag"
+          [ngClass]="tag.className || ''"
+        >
+          {{ tag.text }}
+        </span>
+      </div>
+
+      <!-- Metadata Box -->
+      <div class="detail-meta" *ngIf="detailData().meta?.length">
+        <ng-container *ngFor="let item of detailData().meta">
+          <div class="meta-item" *ngIf="item.value">
+            <span class="meta-label">{{ item.label }}</span>
+            <span class="meta-value">{{ item.value }}</span>
+          </div>
+        </ng-container>
+      </div>
+
+      <!-- Source code layout -->
+      <pre class="code-block" *ngIf="detailData().code !== undefined">
+        <code>{{ detailData().code }}</code>
+      </pre>
+
+      <!-- Markdown body layout -->
+      <div class="markdown-body" *ngIf="detailData().markdown" [innerHTML]="getSafeHtml(detailData().markdown)"></div>
+
+      <!-- Normal text layout -->
+      <p class="detail-text" *ngIf="detailData().text && !detailData().markdown">{{ detailData().text }}</p>
+    </div>
+  </aside>
+</div>

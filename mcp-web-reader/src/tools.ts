@@ -95,7 +95,7 @@ server.registerTool(
       text: z.string().min(1).max(8000).describe("Text to translate"),
       target_lang: z.string().min(2).max(20).default("vi").describe("Target language code, e.g. vi, en, ja, ko, zh-CN"),
       source_lang: z.string().min(2).max(20).default("auto").describe("Source language code or auto"),
-      provider: z.enum(["auto", "google", "mymemory", "duckduckgo"]).default("auto")
+      provider: z.enum(["auto", "google", "mymemory", "duckduckgo", "lingva"]).default("auto")
     }
   },
   async ({ text, target_lang, source_lang, provider }) => {

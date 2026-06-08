@@ -44,3 +44,6 @@ The following GitHub security features are enabled for this repository and must 
 - [x] **PDF Support**: Add PDF parsing to `fetch_url`. (Implemented via `fetch_document`)
 - [x] **Structured Data**: Add specific tools for table extraction and JSON-LD metadata. (Implemented via `extract_structured_data`)
 - [x] **Specialized Task Profiles**: Add coding search and Vietnam legal/admin retrieval tools. (Implemented via `search_code_web`, `search_vietnam_legal`, `fetch_vietnam_legal_document`, and `vietnam_legal_qa_context`)
+- [x] **Angular SPA & Modern Styling**: Migrated to a modular Angular SPA frontend with Pico.css v2 integration, central search engine hero layout, and custom translation page.
+- [x] **Docker Stack Integration**: Created a multi-stage build running SearXNG and the Express API server containerized.
+- [x] **Expanded Translation APIs**: Integrated Lingva Translate proxy and persistent browser translation history.

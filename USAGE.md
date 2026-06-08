@@ -62,7 +62,7 @@ You have these tools:
 - extract_structured_data: extract HTML tables (as Markdown) and JSON-LD metadata.
 - list_github_repo: list files and directories in a GitHub repository.
 - search_code_web: search code snippets from the internet, extract code blocks, and return best snippets.
-- translate_text: translate text with free/no-key external providers. Provider auto tries Google unofficial, MyMemory, then DuckDuckGo best-effort.
+- translate_text: translate text with free/no-key external providers. Provider auto tries Google unofficial, MyMemory, DuckDuckGo, then Lingva Translate proxy.
 - search_vietnam_legal: search official Vietnamese law, administrative-document, and public-procedure sources.
 - fetch_vietnam_legal_document: fetch a Vietnamese legal/admin document URL and extract text plus legal metadata.
 - vietnam_legal_qa_context: build source-backed context for Vietnamese law/admin Q&A.
@@ -212,23 +212,34 @@ https://vanban.chinhphu.vn/default.aspx?docid=99777&pageid=27160
 
 To use the browser web app, standalone API server, and Swagger UI:
 
-1. Open a terminal and navigate to the project root.
-2. Make sure SearXNG is running:
+**Option 1: Run with Docker Compose (Easiest)**
+```bash
+docker compose up -d --build
+```
+
+**Option 2: Run Manually (Local Development)**
+1. Make sure SearXNG is running:
    ```bash
-   docker compose up -d
+   docker compose up -d searxng
+   ```
+2. Build the Angular frontend SPA first:
+   ```bash
+   cd mcp-web-reader/frontend
+   npm run build
+   cd ..
    ```
 3. Run the web/API server:
    ```bash
-   cd mcp-web-reader
    npm run serve:api
    ```
-4. Open the web app:
-   ```text
-   http://localhost:3000
-   ```
-5. Use the mode buttons under the search box: `Web`, `Mã nguồn`, `Văn bản pháp luật`, `Thủ tục hành chính`, or `PDF`.
-6. Click a result to show the optimized detail panel on the right.
-7. Swagger is still available at:
+
+Open the web app in your browser:
+```text
+http://localhost:3000
+```
+6. Use the tabs: `Web`, `Mã nguồn`, `Văn bản pháp luật`, `Thủ tục hành chính`, `PDF`, or `Dịch thuật`.
+7. Click a result to show the optimized detail panel on the right.
+8. Swagger is still available at:
    ```text
    http://localhost:3000/docs
    ```

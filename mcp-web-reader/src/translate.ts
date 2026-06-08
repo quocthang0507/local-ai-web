@@ -1,6 +1,6 @@
 import { TRANSLATE_MAX_CHARS, TRANSLATE_PROVIDERS, TRANSLATE_TIMEOUT_MS } from "./config.js";
 
-export type TranslateProvider = "auto" | "google" | "mymemory" | "duckduckgo";
+export type TranslateProvider = "auto" | "google" | "mymemory" | "duckduckgo" | "lingva";
 
 export type TranslateOptions = {
   text: string;
@@ -185,19 +185,50 @@ async function translateWithDuckDuckGo(options: TranslateOptions): Promise<Provi
   };
 }
 
+async function translateWithLingva(options: TranslateOptions): Promise<ProviderResult> {
+  const sourceLang = normalizeLang(options.sourceLang, "auto");
+  const targetLang = normalizeLang(options.targetLang, "vi");
+  const chunks = chunkText(options.text, 1000);
+  const translatedChunks: string[] = [];
+  let detectedSourceLang: string | undefined;
+
+  for (const chunk of chunks) {
+    const url = `https://lingva.ml/api/v1/${sourceLang}/${targetLang}/${encodeURIComponent(chunk)}`;
+    const endpoint = new URL(url);
+    const data = await fetchJson(endpoint);
+    const translated = data?.translation;
+
+    if (!translated) {
+      throw new Error("Lingva returned an empty translation");
+    }
+
+    translatedChunks.push(translated);
+    if (!detectedSourceLang && data?.info?.detectedSource) {
+      detectedSourceLang = data.info.detectedSource;
+    }
+  }
+
+  return {
+    provider: "lingva",
+    translatedText: translatedChunks.join(""),
+    detectedSourceLang
+  };
+}
+
 function providerOrder(provider: TranslateProvider): Array<Exclude<TranslateProvider, "auto">> {
   if (provider !== "auto") return [provider];
 
   const configured = TRANSLATE_PROVIDERS.filter((p): p is Exclude<TranslateProvider, "auto"> =>
-    p === "google" || p === "mymemory" || p === "duckduckgo"
+    p === "google" || p === "mymemory" || p === "duckduckgo" || p === "lingva"
   );
 
-  return configured.length ? configured : ["google", "mymemory", "duckduckgo"];
+  return configured.length ? configured : ["google", "mymemory", "duckduckgo", "lingva"];
 }
 
 async function runProvider(provider: Exclude<TranslateProvider, "auto">, options: TranslateOptions) {
   if (provider === "google") return translateWithGoogle(options);
   if (provider === "mymemory") return translateWithMyMemory(options);
+  if (provider === "lingva") return translateWithLingva(options);
   return translateWithDuckDuckGo(options);
 }
 

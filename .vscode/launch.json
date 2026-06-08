@@ -2,16 +2,26 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Build Project (npm run build)",
+      "name": "Debug API Server (Direct)",
       "type": "node",
       "request": "launch",
       "cwd": "${workspaceFolder}/mcp-web-reader",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "build"
-      ],
+      "program": "${workspaceFolder}/mcp-web-reader/dist/http.js",
+      "preLaunchTask": "npm: build - mcp-web-reader",
+      "sourceMaps": true,
+      "smartStep": true,
+      "env": {
+        "NODE_ENV": "development",
+        "API_PORT": "3000"
+      },
       "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug Frontend (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/mcp-web-reader/frontend"
     },
     {
       "name": "Serve API (npm run serve:api)",
@@ -29,6 +39,15 @@
         "pattern": "Swagger UI available at (https?://\\S+)",
         "uriFormat": "%s"
       }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Run Full Stack (API + Frontend Debug)",
+      "configurations": [
+        "Debug API Server (Direct)",
+        "Debug Frontend (Chrome)"
+      ]
     }
   ]
 }

@@ -8,6 +8,7 @@
     "build:watch": "tsc --watch",
     "start": "node dist/index.js",
     "serve:api": "node dist/http.js",
+    "dev": "node --watch dist/http.js",
     "print:mcp": "node scripts/print-mcp-config.js",
     "verify": "node scripts/verify.js",
     "test": "node test_mcp.js"

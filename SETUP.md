@@ -559,44 +559,63 @@ npm run print:mcp
 
 ## Access the Web App
 
-Start SearXNG from the project root:
+You can run the web app and SearXNG together using Docker Compose (Option 1) or run them manually for local development (Option 2).
+
+### Option 1: Run with Docker Compose (Easiest)
+
+From the project root directory, run:
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-Start the web/API server:
+This will automatically:
+1. Build the Angular SPA frontend.
+2. Build the TypeScript backend.
+3. Install Chromium dependencies and Playwright.
+4. Launch SearXNG and the web app server together in separate containers.
 
-```bash
-cd mcp-web-reader
-npm run serve:api
-```
-
-Open the web app in your browser:
-
+Once running, access the web interface at:
 ```text
 http://localhost:3000
 ```
 
-The same server also exposes Swagger UI:
+To stop the containers:
+```bash
+docker compose down
+```
 
+### Option 2: Run Manually (Local Development)
+
+1. Start only the SearXNG service from the project root:
+   ```bash
+   docker compose up -d searxng
+   ```
+
+2. Build the Angular SPA frontend:
+   ```bash
+   cd mcp-web-reader/frontend
+   npm run build
+   cd ..
+   ```
+
+3. Start the local API server:
+   ```bash
+   npm run serve:api
+   ```
+
+Open the web app in your browser at `http://localhost:3000`.
+
+### Swagger UI API Documentation
+
+Regardless of how you start the server, you can access the OpenAPI Swagger documentation at:
 ```text
 http://localhost:3000/docs
 ```
 
-If port `3000` is already in use, run with another port:
-
-```bash
-API_PORT=3001 npm run serve:api
-```
-
-Windows PowerShell:
-
-```powershell
-$env:API_PORT="3001"; npm run serve:api
-```
-
-Then open `http://localhost:3001`.
+If you need to use a different port for manual local development:
+- Linux/macOS: `API_PORT=3001 npm run serve:api`
+- Windows PowerShell: `$env:API_PORT="3001"; npm run serve:api`
 
 ---
 
