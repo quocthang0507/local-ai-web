@@ -24,6 +24,7 @@ The following GitHub security features are enabled for this repository and must 
 - **Configuration**: Use `mcp-web-reader/src/config.ts` for all environment-based settings. Do not hardcode timeouts or URLs.
 - **Error Handling**: Tools should return clean error messages through `textResult` rather than throwing raw exceptions to the MCP client where possible, unless it's a fatal error.
 - **Caching**: Utilize the in-memory cache in `mcp-web-reader/src/cache.ts` to minimize redundant fetches and reduce load on SearXNG/Target sites.
+- **Specialized Retrieval**: Keep coding retrieval logic in `mcp-web-reader/src/code_web.ts` and Vietnam legal/admin retrieval logic in `mcp-web-reader/src/legal_vn.ts`. Legal/admin tools must prefer official Vietnamese sources, cite URLs, and surface uncertainty around legal effect.
 
 ## Development Workflow
 
@@ -42,3 +43,4 @@ The following GitHub security features are enabled for this repository and must 
 - [ ] **Persistent Cache**: Migrate from in-memory Map to SQLite.
 - [x] **PDF Support**: Add PDF parsing to `fetch_url`. (Implemented via `fetch_document`)
 - [x] **Structured Data**: Add specific tools for table extraction and JSON-LD metadata. (Implemented via `extract_structured_data`)
+- [x] **Specialized Task Profiles**: Add coding search and Vietnam legal/admin retrieval tools. (Implemented via `search_code_web`, `search_vietnam_legal`, `fetch_vietnam_legal_document`, and `vietnam_legal_qa_context`)

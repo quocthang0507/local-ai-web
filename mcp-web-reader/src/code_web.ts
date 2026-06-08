@@ -1,6 +1,17 @@
 import { fetchWithSafety, renderUrlToSource } from "./browser.js";
 import { htmlToMarkdown } from "./extract.js";
 import { decodeBasicEntities } from "./helper.js";
+import { getCache, setCache } from "./cache.js";
+import { searxngSearch } from "./searxng.js";
+import {
+  ENABLE_CACHE,
+  SEARXNG_ENGINES,
+  CODE_WEB_CACHE_TTL_MS,
+  CODE_WEB_MAX_URLS,
+  CODE_WEB_MAX_SNIPPETS,
+  CODE_WEB_MAX_CHARS_PER_SNIPPET,
+  CODE_WEB_PREFERRED_DOMAINS
+} from "./config.js";
 import * as cheerio from "cheerio";
 
 export type WebCodeSnippet = {
@@ -22,18 +33,27 @@ export function preferredDomains(): string[] {
 
 export function rewriteQueries(q: string): string[] {
   const base = q.trim();
+  const lower = base.toLowerCase();
 
   // Step-back rewrite: biến query thành dạng retrieval-friendly [1](https://dev.to/yaruyng/query-rewrite-in-rag-systems-why-it-matters-and-how-it-works-3mmd)
   const expanded = base
-    .replace(/\?.*$/, "") // remove question noise
+    .replace(/[?？]\s*$/, "") // remove trailing question noise
 
-  return [
+  const queries = [
     `${expanded} code example`,
     `${expanded} implementation`,
+    `${expanded} official documentation example`,
     `${expanded} github example`,
     `${expanded} stackoverflow solution`,
     `${expanded} snippet`,
   ];
+
+  const language = detectLanguage(lower);
+  if (language) {
+    queries.unshift(`${expanded} ${language} example`);
+  }
+
+  return Array.from(new Set(queries));
 }
 
 export function filterUrls(urls: string[], preferred: string[], maxUrls: number): string[] {
@@ -42,11 +62,20 @@ export function filterUrls(urls: string[], preferred: string[], maxUrls: number)
   return uniq
     .map(url => ({
       url,
-      score: scoreDomain(url)
+      score: scoreDomain(url) + scorePreferredDomain(url, preferred)
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, maxUrls)
     .map(x => x.url);
+}
+
+function scorePreferredDomain(url: string, preferred: string[]): number {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return preferred.some((domain) => hostMatchesDomain(hostname, domain)) ? 10 : 0;
+  } catch {
+    return 0;
+  }
 }
 
 // Extract fenced code blocks from markdown
@@ -96,13 +125,18 @@ export function extractPreCodeBlocksFromHtml(html: string): string[] {
 
 export function truncateSnippet(code: string, maxChars: number): string {
   if (code.length <= maxChars) return code;
-  return code.slice(0, maxChars) + "\n/* …truncated… */";
+  return code.slice(0, maxChars) + "\n/* ...truncated... */";
 }
 
 export function detectLanguage(query: string): string | undefined {
-  if (query.includes("python")) return "python";
-  if (query.includes("node") || query.includes("express")) return "javascript";
-  if (query.includes("golang")) return "go";
+  const lower = query.toLowerCase();
+  if (lower.includes("python") || lower.includes("django") || lower.includes("fastapi")) return "python";
+  if (lower.includes("typescript") || lower.includes("ts ")) return "typescript";
+  if (lower.includes("node") || lower.includes("express") || lower.includes("javascript") || lower.includes("js ")) return "javascript";
+  if (lower.includes("golang") || lower.includes(" go ")) return "go";
+  if (lower.includes("rust")) return "rust";
+  if (lower.includes("java ") || lower.includes("spring")) return "java";
+  if (lower.includes("c#") || lower.includes("dotnet") || lower.includes(".net")) return "csharp";
   return undefined;
 }
 
@@ -242,7 +276,7 @@ export function scoreSnippet(url: string, code: string, lang?: string): number {
 
 export function truncateCode(code: string, maxChars: number): string {
   if (code.length <= maxChars) return code;
-  return code.slice(0, maxChars) + "\n/* …truncated… */";
+  return code.slice(0, maxChars) + "\n/* ...truncated... */";
 }
 
 export async function fetchSnippetsFromUrl(url: string): Promise<Array<{ lang?: string; code: string }>> {
@@ -321,4 +355,119 @@ export async function fetchSnippetsFromUrl(url: string): Promise<Array<{ lang?: 
   const extracted = htmlToMarkdown(html, finalRenderedUrl);
   const md = extracted.markdown || "";
   return extractFencedCodeBlocks(md);
+}
+
+export type SearchCodeWebOptions = {
+  query: string;
+  maxSnippets?: number;
+  languageHint?: string;
+};
+
+export async function searchCodeWeb(options: SearchCodeWebOptions) {
+  const query = options.query;
+  const maxSnippets = options.maxSnippets ?? 10;
+  const languageHint = options.languageHint;
+  const enhancedQueries = rewriteQueries(query);
+
+  const cacheKey = `search_code_web:${JSON.stringify({
+    query,
+    enhancedQueries,
+    max_snippets: maxSnippets,
+    language_hint: languageHint || "",
+    engines: SEARXNG_ENGINES,
+    preferred_domains: CODE_WEB_PREFERRED_DOMAINS
+  })}`;
+
+  if (ENABLE_CACHE) {
+    const cached = getCache<any>(cacheKey);
+    if (cached) return { ...cached, cache: { hit: true, key: cacheKey } };
+  }
+
+  const allResults: Array<{ title: string; url: string; snippet: string }> = [];
+  await Promise.allSettled(
+    enhancedQueries.map(async (q) => {
+      try {
+        const rs = await searxngSearch(q, 5, undefined, SEARXNG_ENGINES);
+        for (const r of rs) {
+          if (r.url) allResults.push(r);
+        }
+      } catch {
+        // Ignore failed query variants.
+      }
+    })
+  );
+
+  const allUrls = Array.from(new Set(allResults.map((r) => r.url).filter(Boolean)));
+  const urls = filterUrls(allUrls, CODE_WEB_PREFERRED_DOMAINS, CODE_WEB_MAX_URLS);
+
+  const snippets: Array<{
+    url: string;
+    source: string;
+    lang?: string;
+    code: string;
+    score: number;
+  }> = [];
+
+  const concurrencyLimit = 4;
+  const perUrlTimeoutMs = 12000;
+
+  for (let i = 0; i < urls.length; i += concurrencyLimit) {
+    const batch = urls.slice(i, i + concurrencyLimit);
+    await Promise.allSettled(
+      batch.map(async (url) => {
+        try {
+          const blocks = await Promise.race([
+            fetchSnippetsFromUrl(url),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("per-url timeout")), perUrlTimeoutMs)
+            )
+          ]);
+
+          for (const b of blocks) {
+            if (snippets.length >= CODE_WEB_MAX_SNIPPETS) continue;
+
+            if (languageHint && b.lang && b.lang.toLowerCase() !== languageHint.toLowerCase()) {
+              continue;
+            }
+
+            const code = truncateCode(b.code, CODE_WEB_MAX_CHARS_PER_SNIPPET);
+            const score = scoreSnippet(url, code, b.lang);
+
+            snippets.push({
+              url,
+              source: (() => {
+                try {
+                  return new URL(url).hostname;
+                } catch {
+                  return "";
+                }
+              })(),
+              lang: b.lang,
+              code,
+              score
+            });
+          }
+        } catch {
+          // Ignore individual URL failures.
+        }
+      })
+    );
+  }
+
+  snippets.sort((a, b) => b.score - a.score);
+
+  const output = {
+    query,
+    rewrittenQueries: enhancedQueries,
+    engines: SEARXNG_ENGINES,
+    preferredDomains: CODE_WEB_PREFERRED_DOMAINS,
+    urls_considered: urls.length,
+    snippets_found: snippets.length,
+    results: snippets.slice(0, maxSnippets),
+    cache: { hit: false, key: cacheKey, ttlMs: CODE_WEB_CACHE_TTL_MS }
+  };
+
+  if (ENABLE_CACHE) setCache(cacheKey, output, CODE_WEB_CACHE_TTL_MS);
+
+  return output;
 }

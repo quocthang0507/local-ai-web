@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Local AI Search</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <svg aria-hidden="true" class="icon-sprite">
+      <symbol id="icon-search" viewBox="0 0 24 24">
+        <path d="m21 21-4.35-4.35" />
+        <circle cx="11" cy="11" r="7" />
+      </symbol>
+      <symbol id="icon-globe" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20" />
+      </symbol>
+      <symbol id="icon-code" viewBox="0 0 24 24">
+        <path d="m16 18 6-6-6-6M8 6l-6 6 6 6" />
+      </symbol>
+      <symbol id="icon-scale" viewBox="0 0 24 24">
+        <path d="m16 16 3-8 3 8c-.87.65-1.87 1-3 1s-2.13-.35-3-1ZM2 16l3-8 3 8c-.87.65-1.87 1-3 1s-2.13-.35-3-1ZM7 21h10M12 3v18M3 7h18" />
+      </symbol>
+      <symbol id="icon-file" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+        <path d="M14 2v6h6M8 13h8M8 17h6" />
+      </symbol>
+      <symbol id="icon-list" viewBox="0 0 24 24">
+        <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+      </symbol>
+      <symbol id="icon-open" viewBox="0 0 24 24">
+        <path d="M15 3h6v6M10 14 21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
+      </symbol>
+    </svg>
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">AI</span>
+        <span>Local AI Search</span>
+      </div>
+      <nav class="top-actions" aria-label="Điều hướng">
+        <a class="icon-link" href="/docs" title="Swagger API">
+          <svg><use href="#icon-file"></use></svg>
+          <span>API</span>
+        </a>
+        <button class="icon-button" id="healthButton" type="button" title="Kiểm tra hệ thống">
+          <svg><use href="#icon-list"></use></svg>
+          <span class="sr-only">Kiểm tra hệ thống</span>
+        </button>
+      </nav>
+    </header>
+
+    <main class="app-shell">
+      <section class="search-band" aria-label="Tìm kiếm">
+        <form class="search-form" id="searchForm">
+          <label class="sr-only" for="queryInput">Từ khóa tìm kiếm</label>
+          <div class="search-box">
+            <svg class="search-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+            <input
+              id="queryInput"
+              name="query"
+              type="search"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Tìm mã nguồn, văn bản pháp luật, thủ tục hành chính..."
+            />
+            <button class="primary-button" type="submit">
+              <svg><use href="#icon-search"></use></svg>
+              <span>Tìm</span>
+            </button>
+          </div>
+
+          <div class="mode-tabs" role="tablist" aria-label="Loại tìm kiếm">
+            <button class="mode-tab active" type="button" data-mode="web">
+              <svg><use href="#icon-globe"></use></svg>
+              <span>Web</span>
+            </button>
+            <button class="mode-tab" type="button" data-mode="code">
+              <svg><use href="#icon-code"></use></svg>
+              <span>Mã nguồn</span>
+            </button>
+            <button class="mode-tab" type="button" data-mode="legal">
+              <svg><use href="#icon-scale"></use></svg>
+              <span>Văn bản pháp luật</span>
+            </button>
+            <button class="mode-tab" type="button" data-mode="procedure">
+              <svg><use href="#icon-file"></use></svg>
+              <span>Thủ tục hành chính</span>
+            </button>
+            <button class="mode-tab" type="button" data-mode="pdf">
+              <svg><use href="#icon-file"></use></svg>
+              <span>PDF</span>
+            </button>
+          </div>
+
+          <div class="filter-row">
+            <label>
+              <span>Thời gian</span>
+              <select id="timeRange">
+                <option value="">Mọi thời điểm</option>
+                <option value="day">24 giờ</option>
+                <option value="week">7 ngày</option>
+                <option value="month">30 ngày</option>
+                <option value="year">1 năm</option>
+              </select>
+            </label>
+            <label>
+              <span>Số kết quả</span>
+              <select id="maxResults">
+                <option value="5">5</option>
+                <option value="8" selected>8</option>
+                <option value="10">10</option>
+              </select>
+            </label>
+            <label class="check-filter" id="referenceFilter">
+              <input id="includeUnofficial" type="checkbox" />
+              <span>Thêm nguồn tham khảo</span>
+            </label>
+          </div>
+        </form>
+      </section>
+
+      <section class="status-row" aria-live="polite">
+        <div id="statusText">Sẵn sàng</div>
+        <div class="health-pill" id="healthPill">API</div>
+      </section>
+
+      <section class="workspace">
+        <section class="results-pane" aria-label="Kết quả tìm kiếm">
+          <div class="pane-head">
+            <h1>Kết quả</h1>
+            <span id="resultCount">0</span>
+          </div>
+          <div class="results-list" id="resultsList"></div>
+        </section>
+
+        <aside class="detail-pane" id="detailPane" aria-label="Nội dung kết quả">
+          <div class="empty-detail">
+            <svg><use href="#icon-search"></use></svg>
+            <h2>Chọn một kết quả</h2>
+            <p>Nội dung sẽ hiển thị tại đây.</p>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

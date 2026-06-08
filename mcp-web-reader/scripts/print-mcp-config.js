@@ -34,7 +34,27 @@ const config = {
           process.env.RENDER_BLOCK_RESOURCE_TYPES || "image,media,font",
         ALLOW_DOMAINS: process.env.ALLOW_DOMAINS || "",
         DEBUG_LOCAL_WEB_READER: process.env.DEBUG_LOCAL_WEB_READER || "0",
-        ENABLE_CACHE: process.env.ENABLE_CACHE || "1"
+        ENABLE_CACHE: process.env.ENABLE_CACHE || "1",
+        SEARCH_CACHE_TTL_MS: process.env.SEARCH_CACHE_TTL_MS || "300000",
+        FETCH_CACHE_TTL_MS: process.env.FETCH_CACHE_TTL_MS || "600000",
+        RENDER_CACHE_TTL_MS: process.env.RENDER_CACHE_TTL_MS || "600000",
+        CODE_WEB_CACHE_TTL_MS: process.env.CODE_WEB_CACHE_TTL_MS || "300000",
+        CODE_WEB_MAX_URLS: process.env.CODE_WEB_MAX_URLS || "8",
+        CODE_WEB_MAX_SNIPPETS: process.env.CODE_WEB_MAX_SNIPPETS || "20",
+        CODE_WEB_MAX_CHARS_PER_SNIPPET:
+          process.env.CODE_WEB_MAX_CHARS_PER_SNIPPET || "3000",
+        CODE_WEB_PREFERRED_DOMAINS:
+          process.env.CODE_WEB_PREFERRED_DOMAINS ||
+          "github.com,stackoverflow.com,stackexchange.com,developer.mozilla.org,learn.microsoft.com,docs.python.org",
+        LEGAL_VN_CACHE_TTL_MS: process.env.LEGAL_VN_CACHE_TTL_MS || "600000",
+        LEGAL_VN_MAX_URLS: process.env.LEGAL_VN_MAX_URLS || "8",
+        LEGAL_VN_MAX_DOC_CHARS: process.env.LEGAL_VN_MAX_DOC_CHARS || "30000",
+        LEGAL_VN_OFFICIAL_DOMAINS:
+          process.env.LEGAL_VN_OFFICIAL_DOMAINS ||
+          "vbpl.vn,vanban.chinhphu.vn,congbao.chinhphu.vn,chinhphu.vn,quochoi.vn,gov.vn,dichvucong.gov.vn",
+        LEGAL_VN_REFERENCE_DOMAINS:
+          process.env.LEGAL_VN_REFERENCE_DOMAINS ||
+          "thuvienphapluat.vn,luatvietnam.vn"
       }
     }
   }

@@ -12,6 +12,16 @@ Use search_web to find recent news about "Model Context Protocol" from the past 
 
 Use search_code_web to find Python code examples for converting Lunar calendar to Solar calendar. Extract the best code snippet and explain how it works.
 
+Use search_code_web to find TypeScript examples for implementing an MCP tool with zod input validation. Prefer official docs and GitHub examples.
+
+## Vietnam Legal/Admin Q&A
+
+Use vietnam_legal_qa_context to answer: "Thể thức trình bày văn bản hành chính hiện nay được quy định bởi văn bản nào, và cần lưu ý gì về số ký hiệu, ngày tháng?" Cite official URLs.
+
+Use search_vietnam_legal to find official sources for "Nghị định 30/2020/NĐ-CP công tác văn thư", then use fetch_vietnam_legal_document on the best result and summarize its metadata.
+
+Use vietnam_legal_qa_context with mode=procedure to answer: "Hồ sơ cấp phiếu lý lịch tư pháp trực tuyến gồm những gì?" Cite official public-service or ministry sources.
+
 ## Static page
 
 Use fetch_url to read this page and summarize it:

@@ -6,7 +6,8 @@ import { getCache, setCache, clearCache, cacheSize, cacheStats } from './cache.j
 import { htmlToMarkdown, ExtractionResult } from './extract.js';
 import { getGlobalBrowser, closeGlobalBrowser, fetchWithSafety, renderUrlToSource } from './browser.js';
 import { searxngSearch } from './searxng.js';
-import { fetchSnippetsFromUrl, scoreSnippet, truncateCode, rewriteQueries, filterUrls, githubToRaw, isGitHubRepoUrl, isGitHubFileUrl, isGistUrl } from './code_web.js';
+import { searchCodeWeb, githubToRaw, isGitHubRepoUrl, isGitHubFileUrl, isGistUrl } from './code_web.js';
+import { searchVietnamLegal, fetchVietnamLegalDocument, buildVietnamLegalContext } from './legal_vn.js';
 import { ENABLE_CACHE, SEARXNG_URL, SEARXNG_ENGINES, SEARXNG_REQUEST_HEADERS, REQUEST_TIMEOUT_MS, DEFAULT_MAX_CHARS, FETCH_CACHE_TTL_MS, SEARCH_CACHE_TTL_MS, RENDER_CACHE_TTL_MS, CODE_WEB_MAX_URLS, CODE_WEB_MAX_SNIPPETS, CODE_WEB_MAX_CHARS_PER_SNIPPET, CODE_WEB_CACHE_TTL_MS, CODE_WEB_PREFERRED_DOMAINS } from './config.js';
 import { PDFParse } from 'pdf-parse';
 import { extractTables, extractMetadata } from './structured.js';
@@ -527,98 +528,112 @@ server.registerTool(
     }
   },
   async ({ query, max_snippets, language_hint }) => {
-    const enhancedQueries = rewriteQueries(query);
-
-    const cacheKey = `search_code_web:${JSON.stringify({ query, enhancedQueries, max_snippets, language_hint: language_hint || "", engines: SEARXNG_ENGINES })}`;
-
-    if (ENABLE_CACHE) {
-      const cached = getCache<any>(cacheKey);
-      if (cached) return textResult({ ...cached, cache: { hit: true } });
-    }
-
-    // 1) Search via SearXNG API in parallel
-    const allResults: Array<{ title: string; url: string; snippet: string }> = [];
-    await Promise.allSettled(
-      enhancedQueries.map(async (q) => {
-        try {
-          const rs = await searxngSearch(q, 5, undefined, SEARXNG_ENGINES);
-          for (const r of rs) {
-            if (r.url) allResults.push(r);
-          }
-        } catch {
-          // ignore failed query
-        }
-      })
-    );
-
-    // Dedup URLs and filter/score them
-    const allUrls = Array.from(new Set(allResults.map(r => r.url).filter(Boolean)));
-    const urls = filterUrls(allUrls, CODE_WEB_PREFERRED_DOMAINS, CODE_WEB_MAX_URLS);
-
-    // 2) Fetch pages & extract snippets in parallel (with concurrency limit)
-    const snippets: Array<{
-      url: string;
-      source: string;
-      lang?: string;
-      code: string;
-      score: number;
-    }> = [];
-
-    const concurrencyLimit = 4;
-    const PER_URL_TIMEOUT_MS = 12000; // cap each URL so the whole tool stays under MCP timeout
-    for (let i = 0; i < urls.length; i += concurrencyLimit) {
-      const batch = urls.slice(i, i + concurrencyLimit);
-      await Promise.allSettled(
-        batch.map(async (url) => {
-          try {
-            const blocks = await Promise.race([
-              fetchSnippetsFromUrl(url),
-              new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error("per-url timeout")), PER_URL_TIMEOUT_MS)
-              )
-            ]);
-            for (const b of blocks) {
-              if (snippets.length >= CODE_WEB_MAX_SNIPPETS) continue;
-
-              // optional strict language filter
-              if (language_hint && b.lang && b.lang.toLowerCase() !== language_hint.toLowerCase()) {
-                continue;
-              }
-
-              const code = truncateCode(b.code, CODE_WEB_MAX_CHARS_PER_SNIPPET);
-              const score = scoreSnippet(url, code, b.lang);
-
-              snippets.push({
-                url,
-                source: (() => { try { return new URL(url).hostname; } catch { return ""; } })(),
-                lang: b.lang,
-                code,
-                score
-              });
-            }
-          } catch {
-            // ignore
-          }
+    try {
+      return textResult(
+        await searchCodeWeb({
+          query,
+          maxSnippets: max_snippets,
+          languageHint: language_hint
         })
       );
+    } catch (err: any) {
+      return textResult({ error: `search_code_web failed: ${err?.message || String(err)}` });
     }
+  }
+);
 
-    // 3) Rank and return top
-    snippets.sort((a, b) => b.score - a.score);
-    const final = snippets.slice(0, max_snippets);
+server.registerTool(
+  "search_vietnam_legal",
+  {
+    description: "Search official Vietnamese legal, administrative-document, and public-procedure sources. Uses official domains by default (vbpl.vn, vanban.chinhphu.vn, congbao.chinhphu.vn, gov.vn, quochoi.vn). Use before answering Vietnam law or administrative document questions.",
+    inputSchema: {
+      query: z.string().min(1).max(700).describe("Vietnamese legal/admin query or document number"),
+      max_results: z.number().int().min(1).max(10).default(5),
+      mode: z.enum(["law", "administrative", "procedure", "all"]).default("all"),
+      time_range: z.enum(["day", "week", "month", "year"]).optional(),
+      include_unofficial: z.boolean().default(false).describe("If true, include reference sites such as thuvienphapluat.vn or luatvietnam.vn after official sources.")
+    }
+  },
+  async ({ query, max_results, mode, time_range, include_unofficial }) => {
+    try {
+      return textResult(
+        await searchVietnamLegal({
+          query,
+          maxResults: max_results,
+          mode,
+          timeRange: time_range,
+          includeUnofficial: include_unofficial
+        })
+      );
+    } catch (err: any) {
+      return textResult({ error: `search_vietnam_legal failed: ${err?.message || String(err)}` });
+    }
+  }
+);
 
-    const output = {
-      query,
-      engines: SEARXNG_ENGINES,
-      urls_considered: urls.length,
-      snippets_found: snippets.length,
-      results: final,
-      cache: { hit: false, ttlMs: CODE_WEB_CACHE_TTL_MS }
-    };
+server.registerTool(
+  "fetch_vietnam_legal_document",
+  {
+    description: "Fetch a Vietnamese legal/admin document URL and extract text, Markdown, and heuristic metadata such as document number, type, authority, issue date, effective-date signals, and citations. Best after search_vietnam_legal.",
+    inputSchema: {
+      url: z.string().url().describe("Official document URL, HTML page, or PDF URL"),
+      max_chars: z.number().int().min(1000).max(80000).default(30000),
+      render: z.boolean().default(false).describe("Render with Playwright for JavaScript-heavy official pages.")
+    }
+  },
+  async ({ url, max_chars, render }) => {
+    try {
+      return textResult(
+        await fetchVietnamLegalDocument({
+          url,
+          maxChars: max_chars,
+          render
+        })
+      );
+    } catch (err: any) {
+      return textResult({ error: `fetch_vietnam_legal_document failed: ${err?.message || String(err)}` });
+    }
+  }
+);
 
-    if (ENABLE_CACHE) setCache(cacheKey, output, CODE_WEB_CACHE_TTL_MS);
-
-    return textResult(output);
+server.registerTool(
+  "vietnam_legal_qa_context",
+  {
+    description: "Build source-backed context for Vietnamese law, administrative document, or public-procedure Q&A. Searches official sources, fetches top documents, and returns relevant excerpts plus answer guidance. It does not provide legal advice by itself.",
+    inputSchema: {
+      question: z.string().min(1).max(1000).describe("Vietnamese legal/admin question"),
+      max_sources: z.number().int().min(1).max(8).default(5),
+      fetch_top_documents: z.number().int().min(0).max(3).default(2),
+      max_chars_per_document: z.number().int().min(1000).max(30000).default(8000),
+      mode: z.enum(["law", "administrative", "procedure", "all"]).default("all"),
+      time_range: z.enum(["day", "week", "month", "year"]).optional(),
+      include_unofficial: z.boolean().default(false)
+    }
+  },
+  async ({
+    question,
+    max_sources,
+    fetch_top_documents,
+    max_chars_per_document,
+    mode,
+    time_range,
+    include_unofficial
+  }) => {
+    try {
+      return textResult(
+        await buildVietnamLegalContext({
+          question,
+          maxSources: max_sources,
+          fetchTopDocuments: fetch_top_documents,
+          maxCharsPerDocument: max_chars_per_document,
+          mode,
+          timeRange: time_range,
+          includeUnofficial: include_unofficial
+        })
+      );
+    } catch (err: any) {
+      return textResult({ error: `vietnam_legal_qa_context failed: ${err?.message || String(err)}` });
+    }
   }
 );
 

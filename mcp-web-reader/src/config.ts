@@ -55,3 +55,23 @@ export const CODE_WEB_PREFERRED_DOMAINS = (process.env.CODE_WEB_PREFERRED_DOMAIN
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 
+export const LEGAL_VN_CACHE_TTL_MS = Number(process.env.LEGAL_VN_CACHE_TTL_MS || "600000");
+export const LEGAL_VN_MAX_URLS = Number(process.env.LEGAL_VN_MAX_URLS || "8");
+export const LEGAL_VN_MAX_DOC_CHARS = Number(process.env.LEGAL_VN_MAX_DOC_CHARS || "30000");
+
+export const LEGAL_VN_OFFICIAL_DOMAINS = (
+  process.env.LEGAL_VN_OFFICIAL_DOMAINS ||
+  "vbpl.vn,vanban.chinhphu.vn,congbao.chinhphu.vn,chinhphu.vn,quochoi.vn,gov.vn,dichvucong.gov.vn"
+)
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+export const LEGAL_VN_REFERENCE_DOMAINS = (
+  process.env.LEGAL_VN_REFERENCE_DOMAINS ||
+  "thuvienphapluat.vn,luatvietnam.vn"
+)
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+

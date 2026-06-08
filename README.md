@@ -21,6 +21,16 @@ It allows local LLMs (Qwen, Llama, etc.) to:
 
 👉 Works completely local + private (self-hosted SearXNG)
 
+## Vietnam Legal & Administrative Document Research
+
+This project also includes specialized retrieval tools for **Vietnamese law, administrative documents, and public procedures**:
+
+- `search_vietnam_legal`: searches official Vietnamese sources first (`vbpl.vn`, `vanban.chinhphu.vn`, `congbao.chinhphu.vn`, `*.gov.vn`, `quochoi.vn`).
+- `fetch_vietnam_legal_document`: fetches a legal/admin document URL and extracts text, Markdown, and heuristic metadata such as document number, authority, issue date, effective-date signals, and citations.
+- `vietnam_legal_qa_context`: builds source-backed context for Q&A by searching official sources and fetching top documents.
+
+These tools are designed for retrieval and source grounding. They do not replace a qualified Vietnamese lawyer or a competent authority, and models should cite URLs and state uncertainty when legal effect is not verified.
+
 > This project is for local research and personal productivity. It does not bypass login pages, paywalls, CAPTCHA, or website access controls.
 
 ---
@@ -141,6 +151,20 @@ Use this for:
 
 Includes a standalone Express server providing REST APIs and a Swagger UI for executing all web search and reading features independently of LM Studio.
 
+### Web Search App
+
+Includes a browser UI served by the same Express server. Start SearXNG, run the API server, then open:
+
+```text
+http://localhost:3000
+```
+
+The web app provides a search-engine style interface with modes for `Web`, `Mã nguồn`, `Văn bản pháp luật`, `Thủ tục hành chính`, and `PDF`. Swagger remains available at:
+
+```text
+http://localhost:3000/docs
+```
+
 ### `clear_cache`
 
 Clears in-memory cache.
@@ -160,6 +184,18 @@ Closes the background Playwright Chromium browser instance to free up memory.
   - GitHub raw code extraction
   - StackOverflow snippet extraction
   - automatic ranking (best snippet first)
+
+### `search_vietnam_legal`
+
+Searches official Vietnamese legal/admin sources using retrieval-friendly query rewrites. Use this before answering questions about Vietnamese law, administrative-document format, or public procedures.
+
+### `fetch_vietnam_legal_document`
+
+Fetches a Vietnamese legal/admin URL and returns extracted text, Markdown, and heuristic metadata including document number, document type, issuing authority, date signals, status signals, and cited documents.
+
+### `vietnam_legal_qa_context`
+
+Builds source-backed context for Vietnamese legal/admin Q&A by combining official-source search with top-document fetching and relevant excerpt selection.
 
 ---
 
@@ -186,6 +222,7 @@ local-ai-web/
 │  │  ├─ tools.ts          # MCP tool definitions & handlers
 │  │  ├─ searxng.ts        # SearXNG API client
 │  │  ├─ code_web.ts       # Code search & extraction logic
+│  │  ├─ legal_vn.ts       # Vietnam legal/admin search & extraction logic
 │  │  ├─ structured.ts     # Table & Metadata extraction
 │  │  ├─ cache.ts          # In-memory caching
 │  │  ├─ extract.ts        # HTML to Markdown/Text extraction
@@ -195,6 +232,7 @@ local-ai-web/
 │  │  ├─ log.ts            # Logging utilities
 │  │  ├─ http.ts           # Standalone API Server
 │  │  └─ swagger.ts        # OpenAPI Specification
+│  ├─ public/              # Browser web app
 │  └─ scripts/
 │     ├─ print-mcp-config.js
 │     └─ verify.js

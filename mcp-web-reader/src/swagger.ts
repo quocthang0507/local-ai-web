@@ -264,7 +264,7 @@ export const swaggerDocument = {
     "/api/search/code": {
       post: {
         summary: "Search Code Web",
-        description: "Search for code snippets, implementations, and examples across the web (GitHub, StackOverflow, docs).",
+        description: "Search for code snippets, implementations, and examples across the web (GitHub, StackOverflow, official docs).",
         requestBody: {
           required: true,
           content: {
@@ -280,6 +280,101 @@ export const swaggerDocument = {
                 example: {
                   query: "Express JWT middleware example",
                   language_hint: "javascript"
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "200": { description: "Successful response" }
+        }
+      }
+    },
+    "/api/search/vietnam-legal": {
+      post: {
+        summary: "Search Vietnam Legal Sources",
+        description: "Search official Vietnamese legal, administrative-document, and public-procedure sources. Official sources are preferred by default.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  query: { type: "string" },
+                  max_results: { type: "integer", default: 5 },
+                  mode: { type: "string", enum: ["law", "administrative", "procedure", "all"], default: "all" },
+                  time_range: { type: "string", enum: ["day", "week", "month", "year"] },
+                  include_unofficial: { type: "boolean", default: false }
+                },
+                required: ["query"],
+                example: {
+                  query: "Nghị định 30/2020/NĐ-CP thể thức văn bản hành chính",
+                  max_results: 5,
+                  mode: "administrative"
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "200": { description: "Successful response" }
+        }
+      }
+    },
+    "/api/fetch/vietnam-legal": {
+      post: {
+        summary: "Fetch Vietnam Legal Document",
+        description: "Fetch a Vietnamese legal/admin document URL and extract text, Markdown, and heuristic legal metadata.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  url: { type: "string" },
+                  max_chars: { type: "integer", default: 30000 },
+                  render: { type: "boolean", default: false }
+                },
+                required: ["url"],
+                example: {
+                  url: "https://vanban.chinhphu.vn/default.aspx?docid=99777&pageid=27160",
+                  max_chars: 12000
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "200": { description: "Successful response" }
+        }
+      }
+    },
+    "/api/context/vietnam-legal": {
+      post: {
+        summary: "Build Vietnam Legal QA Context",
+        description: "Search official sources, fetch top documents, and return source-backed excerpts plus answer guidance for Vietnamese law/admin Q&A.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  question: { type: "string" },
+                  max_sources: { type: "integer", default: 5 },
+                  fetch_top_documents: { type: "integer", default: 2 },
+                  max_chars_per_document: { type: "integer", default: 8000 },
+                  mode: { type: "string", enum: ["law", "administrative", "procedure", "all"], default: "all" },
+                  time_range: { type: "string", enum: ["day", "week", "month", "year"] },
+                  include_unofficial: { type: "boolean", default: false }
+                },
+                required: ["question"],
+                example: {
+                  question: "Cách trình bày số ký hiệu và phần căn cứ trong văn bản hành chính theo quy định hiện hành?",
+                  mode: "administrative",
+                  fetch_top_documents: 2
                 }
               }
             }

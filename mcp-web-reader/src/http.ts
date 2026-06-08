@@ -1,6 +1,8 @@
 import express from "express";
 import swaggerUi from "swagger-ui-express";
 import cors from "cors";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { swaggerDocument } from "./swagger.js";
 import { cacheSize, clearCache, cacheStats, getCache, setCache } from "./cache.js";
 import { closeGlobalBrowser, getGlobalBrowser, fetchWithSafety, renderUrlToSource } from "./browser.js";
@@ -8,16 +10,19 @@ import { SEARXNG_URL, ENABLE_CACHE, SEARXNG_REQUEST_HEADERS, REQUEST_TIMEOUT_MS,
 import { makeCacheKey, htmlToText } from "./helper.js";
 import { htmlToMarkdown } from "./extract.js";
 import { extractTables, extractMetadata } from "./structured.js";
-import { rewriteQueries, filterUrls, fetchSnippetsFromUrl, truncateCode, scoreSnippet, githubToRaw, isGitHubRepoUrl, isGitHubFileUrl, isGistUrl } from "./code_web.js";
+import { searchCodeWeb, githubToRaw, isGitHubRepoUrl, isGitHubFileUrl, isGistUrl } from "./code_web.js";
+import { searchVietnamLegal, fetchVietnamLegalDocument, buildVietnamLegalContext } from "./legal_vn.js";
 import { searxngSearch } from "./searxng.js";
 import { PDFParse } from "pdf-parse";
 import * as cheerio from "cheerio";
 
 const app = express();
 const port = process.env.API_PORT || 3000;
+const publicDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
 
 app.use(cors());
 app.use(express.json());
+app.use(express.static(publicDir));
 
 // Mount Swagger UI
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
@@ -311,66 +316,82 @@ app.post("/api/search/code", async (req, res) => {
   const { query, max_snippets = 10, language_hint } = req.body;
   if (!query) return res.status(400).json({ error: "query is required" });
 
-  const enhancedQueries = rewriteQueries(query);
-  const cacheKey = `search_code_web:${JSON.stringify({ query, enhancedQueries, max_snippets, language_hint: language_hint || "", engines: SEARXNG_ENGINES })}`;
-
-  if (ENABLE_CACHE) {
-    const cached = getCache<any>(cacheKey);
-    if (cached) return res.json({ ...cached, cache: { hit: true } });
-  }
-
   try {
-    const allResults: Array<{ title: string; url: string; snippet: string }> = [];
-    await Promise.allSettled(
-      enhancedQueries.map(async (q) => {
-        try {
-          const rs = await searxngSearch(q, 5, undefined, SEARXNG_ENGINES);
-          for (const r of rs) {
-            if (r.url) allResults.push(r);
-          }
-        } catch { }
-      })
-    );
-
-    const allUrls = Array.from(new Set(allResults.map(r => r.url).filter(Boolean)));
-    const urls = filterUrls(allUrls, CODE_WEB_PREFERRED_DOMAINS, CODE_WEB_MAX_URLS);
-
-    const snippets: Array<any> = [];
-    const concurrencyLimit = 4;
-    const PER_URL_TIMEOUT_MS = 12000;
-    for (let i = 0; i < urls.length; i += concurrencyLimit) {
-      const batch = urls.slice(i, i + concurrencyLimit);
-      await Promise.allSettled(
-        batch.map(async (url) => {
-          try {
-            const blocks = await Promise.race([
-              fetchSnippetsFromUrl(url),
-              new Promise<never>((_, reject) => setTimeout(() => reject(new Error("per-url timeout")), PER_URL_TIMEOUT_MS))
-            ]);
-            for (const b of blocks) {
-              if (snippets.length >= CODE_WEB_MAX_SNIPPETS) continue;
-              if (language_hint && b.lang && b.lang.toLowerCase() !== language_hint.toLowerCase()) continue;
-              const code = truncateCode(b.code, CODE_WEB_MAX_CHARS_PER_SNIPPET);
-              const score = scoreSnippet(url, code, b.lang);
-              snippets.push({ url, source: (() => { try { return new URL(url).hostname; } catch { return ""; } })(), lang: b.lang, code, score });
-            }
-          } catch { }
-        })
-      );
-    }
-
-    snippets.sort((a, b) => b.score - a.score);
-    const final = snippets.slice(0, max_snippets);
-
-    const output = { query, engines: SEARXNG_ENGINES, urls_considered: urls.length, snippets_found: snippets.length, results: final, cache: { hit: false, ttlMs: CODE_WEB_CACHE_TTL_MS } };
-    if (ENABLE_CACHE) setCache(cacheKey, output, CODE_WEB_CACHE_TTL_MS);
-    res.json(output);
+    res.json(await searchCodeWeb({ query, maxSnippets: max_snippets, languageHint: language_hint }));
   } catch (err: any) {
     res.status(500).json({ error: `search_code_web failed: ${err?.message || String(err)}` });
   }
 });
 
+app.post("/api/search/vietnam-legal", async (req, res) => {
+  const {
+    query,
+    max_results = 5,
+    mode = "all",
+    time_range,
+    include_unofficial = false
+  } = req.body;
+
+  if (!query) return res.status(400).json({ error: "query is required" });
+
+  try {
+    res.json(
+      await searchVietnamLegal({
+        query,
+        maxResults: max_results,
+        mode,
+        timeRange: time_range,
+        includeUnofficial: include_unofficial
+      })
+    );
+  } catch (err: any) {
+    res.status(500).json({ error: `search_vietnam_legal failed: ${err?.message || String(err)}` });
+  }
+});
+
+app.post("/api/fetch/vietnam-legal", async (req, res) => {
+  const { url, max_chars = 30000, render = false } = req.body;
+  if (!url) return res.status(400).json({ error: "url is required" });
+
+  try {
+    res.json(await fetchVietnamLegalDocument({ url, maxChars: max_chars, render }));
+  } catch (err: any) {
+    res.status(500).json({ error: `fetch_vietnam_legal_document failed: ${err?.message || String(err)}` });
+  }
+});
+
+app.post("/api/context/vietnam-legal", async (req, res) => {
+  const {
+    question,
+    max_sources = 5,
+    fetch_top_documents = 2,
+    max_chars_per_document = 8000,
+    mode = "all",
+    time_range,
+    include_unofficial = false
+  } = req.body;
+
+  if (!question) return res.status(400).json({ error: "question is required" });
+
+  try {
+    res.json(
+      await buildVietnamLegalContext({
+        question,
+        maxSources: max_sources,
+        fetchTopDocuments: fetch_top_documents,
+        maxCharsPerDocument: max_chars_per_document,
+        mode,
+        timeRange: time_range,
+        includeUnofficial: include_unofficial
+      })
+    );
+  } catch (err: any) {
+    res.status(500).json({ error: `vietnam_legal_qa_context failed: ${err?.message || String(err)}` });
+  }
+});
+
 app.listen(port, () => {
+  console.log(`Web app available at http://localhost:${port}`);
   console.log(`API Server listening at http://localhost:${port}`);
   console.log(`Swagger UI available at http://localhost:${port}/docs`);
 });

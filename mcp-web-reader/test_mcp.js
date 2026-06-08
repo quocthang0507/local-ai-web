@@ -202,6 +202,25 @@ async function runTests() {
         max_snippets: 2
     }, 60000, "results");
 
+    // 5.5 Vietnam Legal/Admin Research
+    await runTest("Search Vietnam Legal Sources", "search_vietnam_legal", {
+        query: "Nghị định 30/2020/NĐ-CP thể thức văn bản hành chính",
+        max_results: 3,
+        mode: "administrative"
+    }, 30000, "results");
+
+    await runTest("Fetch Vietnam Legal Document", "fetch_vietnam_legal_document", {
+        url: "https://vanban.chinhphu.vn/default.aspx?docid=99777&pageid=27160",
+        max_chars: 5000
+    }, 30000, "metadata");
+
+    await runTest("Vietnam Legal QA Context", "vietnam_legal_qa_context", {
+        question: "Thể thức văn bản hành chính được quy định ở văn bản nào?",
+        max_sources: 3,
+        fetch_top_documents: 0,
+        mode: "administrative"
+    }, 30000, "search");
+
     // 6. PDF & Structured Data Extraction
     await runTest("Fetch Document (PDF)", "fetch_document", {
         url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
