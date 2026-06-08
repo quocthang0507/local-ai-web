@@ -14,6 +14,12 @@ Use search_code_web to find Python code examples for converting Lunar calendar t
 
 Use search_code_web to find TypeScript examples for implementing an MCP tool with zod input validation. Prefer official docs and GitHub examples.
 
+## Translation
+
+Use translate_text to translate this to Vietnamese: "Please review the latest deployment notes before releasing."
+
+Use translate_text with source_lang=vi and target_lang=en to translate: "Văn bản này có hiệu lực từ ngày ký."
+
 ## Vietnam Legal/Admin Q&A
 
 Use vietnam_legal_qa_context to answer: "Thể thức trình bày văn bản hành chính hiện nay được quy định bởi văn bản nào, và cần lưu ý gì về số ký hiệu, ngày tháng?" Cite official URLs.

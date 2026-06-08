@@ -54,7 +54,11 @@ const config = {
           "vbpl.vn,vanban.chinhphu.vn,congbao.chinhphu.vn,chinhphu.vn,quochoi.vn,gov.vn,dichvucong.gov.vn",
         LEGAL_VN_REFERENCE_DOMAINS:
           process.env.LEGAL_VN_REFERENCE_DOMAINS ||
-          "thuvienphapluat.vn,luatvietnam.vn"
+          "thuvienphapluat.vn,luatvietnam.vn",
+        TRANSLATE_TIMEOUT_MS: process.env.TRANSLATE_TIMEOUT_MS || "15000",
+        TRANSLATE_MAX_CHARS: process.env.TRANSLATE_MAX_CHARS || "8000",
+        TRANSLATE_PROVIDERS:
+          process.env.TRANSLATE_PROVIDERS || "google,mymemory,duckduckgo"
       }
     }
   }

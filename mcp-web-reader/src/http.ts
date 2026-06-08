@@ -12,6 +12,7 @@ import { htmlToMarkdown } from "./extract.js";
 import { extractTables, extractMetadata } from "./structured.js";
 import { searchCodeWeb, githubToRaw, isGitHubRepoUrl, isGitHubFileUrl, isGistUrl } from "./code_web.js";
 import { searchVietnamLegal, fetchVietnamLegalDocument, buildVietnamLegalContext } from "./legal_vn.js";
+import { translateText } from "./translate.js";
 import { searxngSearch } from "./searxng.js";
 import { PDFParse } from "pdf-parse";
 import * as cheerio from "cheerio";
@@ -76,6 +77,48 @@ app.post("/cache/clear", (req, res) => {
 app.post("/browser/close", async (req, res) => {
   await closeGlobalBrowser();
   res.json({ status: "Browser closed successfully." });
+});
+
+app.post("/api/translate", async (req, res) => {
+  const {
+    text,
+    source_lang = "auto",
+    target_lang = "vi",
+    provider = "auto"
+  } = req.body;
+
+  if (!text) return res.status(400).json({ error: "text is required" });
+
+  const cacheKey = makeCacheKey("translate_text", {
+    text,
+    source_lang,
+    target_lang,
+    provider
+  });
+
+  if (ENABLE_CACHE) {
+    const cached = getCache<any>(cacheKey);
+    if (cached) return res.json({ ...cached, cache: { hit: true, key: cacheKey } });
+  }
+
+  try {
+    const output = await translateText({
+      text,
+      sourceLang: source_lang,
+      targetLang: target_lang,
+      provider
+    });
+
+    const cachedOutput = {
+      ...output,
+      cache: { hit: false, key: cacheKey, ttlMs: FETCH_CACHE_TTL_MS }
+    };
+
+    if (ENABLE_CACHE) setCache(cacheKey, cachedOutput, FETCH_CACHE_TTL_MS);
+    res.json(cachedOutput);
+  } catch (err: any) {
+    res.status(500).json({ error: `translate failed: ${err?.message || String(err)}` });
+  }
 });
 
 app.post("/api/search", async (req, res) => {
@@ -146,6 +189,56 @@ app.post("/api/fetch/static", async (req, res) => {
     res.json(output);
   } catch (err: any) {
     res.status(500).json({ error: `fetch_url failed: ${err?.message || String(err)}` });
+  }
+});
+
+app.post("/api/fetch/markdown", async (req, res) => {
+  const { url, max_chars = 30000 } = req.body;
+  if (!url) return res.status(400).json({ error: "url is required" });
+
+  const finalUrl = githubToRaw(url);
+  const cacheKey = makeCacheKey("fetch_markdown", { url: finalUrl, max_chars });
+  if (ENABLE_CACHE) {
+    const cached = getCache<any>(cacheKey);
+    if (cached) return res.json({ ...cached, cache: { hit: true, key: cacheKey } });
+  }
+
+  try {
+    const fetched = await fetchWithSafety(finalUrl);
+    let output: any;
+
+    if (isGitHubFileUrl(url) || isGistUrl(url)) {
+      const ext = url.split(".").pop() || "";
+      const code = fetched.body.slice(0, max_chars);
+      output = {
+        mode: "static_markdown",
+        requestedUrl: url,
+        finalUrl: fetched.finalUrl,
+        contentType: fetched.contentType,
+        markdown: "```" + ext + "\n" + code + "\n```"
+      };
+    } else {
+      const extracted = htmlToMarkdown(fetched.body, fetched.finalUrl);
+      output = {
+        mode: "static_markdown",
+        requestedUrl: url,
+        finalUrl: fetched.finalUrl,
+        contentType: fetched.contentType,
+        title: extracted.title,
+        excerpt: extracted.excerpt,
+        byline: extracted.byline,
+        siteName: extracted.siteName,
+        lang: extracted.lang,
+        publishedTime: extracted.publishedTime,
+        markdown: extracted.markdown.slice(0, max_chars)
+      };
+    }
+
+    output.cache = { hit: false, key: cacheKey, ttlMs: FETCH_CACHE_TTL_MS };
+    if (ENABLE_CACHE) setCache(cacheKey, output, FETCH_CACHE_TTL_MS);
+    res.json(output);
+  } catch (err: any) {
+    res.status(500).json({ error: `fetch_markdown failed: ${err?.message || String(err)}` });
   }
 });
 

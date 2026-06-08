@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Local AI Search</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -92,6 +93,10 @@
               <svg><use href="#icon-file"></use></svg>
               <span>PDF</span>
             </button>
+            <button class="mode-tab" type="button" data-mode="translate">
+              <svg><use href="#icon-globe"></use></svg>
+              <span>Dịch thuật</span>
+            </button>
           </div>
 
           <div class="filter-row">
@@ -116,6 +121,38 @@
             <label class="check-filter" id="referenceFilter">
               <input id="includeUnofficial" type="checkbox" />
               <span>Thêm nguồn tham khảo</span>
+            </label>
+            <label class="translation-filter hidden">
+              <span>Nguồn</span>
+              <select id="sourceLang">
+                <option value="auto" selected>Tự phát hiện</option>
+                <option value="vi">Tiếng Việt</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+                <option value="zh-CN">简体中文</option>
+                <option value="fr">Français</option>
+              </select>
+            </label>
+            <label class="translation-filter hidden">
+              <span>Đích</span>
+              <select id="targetLang">
+                <option value="vi" selected>Tiếng Việt</option>
+                <option value="en">English</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+                <option value="zh-CN">简体中文</option>
+                <option value="fr">Français</option>
+              </select>
+            </label>
+            <label class="translation-filter hidden">
+              <span>Provider</span>
+              <select id="translateProvider">
+                <option value="auto" selected>Tự động</option>
+                <option value="google">Google</option>
+                <option value="mymemory">MyMemory</option>
+                <option value="duckduckgo">DuckDuckGo</option>
+              </select>
             </label>
           </div>
         </form>

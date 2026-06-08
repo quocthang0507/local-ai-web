@@ -8,6 +8,7 @@ import { getGlobalBrowser, closeGlobalBrowser, fetchWithSafety, renderUrlToSourc
 import { searxngSearch } from './searxng.js';
 import { searchCodeWeb, githubToRaw, isGitHubRepoUrl, isGitHubFileUrl, isGistUrl } from './code_web.js';
 import { searchVietnamLegal, fetchVietnamLegalDocument, buildVietnamLegalContext } from './legal_vn.js';
+import { translateText } from './translate.js';
 import { ENABLE_CACHE, SEARXNG_URL, SEARXNG_ENGINES, SEARXNG_REQUEST_HEADERS, REQUEST_TIMEOUT_MS, DEFAULT_MAX_CHARS, FETCH_CACHE_TTL_MS, SEARCH_CACHE_TTL_MS, RENDER_CACHE_TTL_MS, CODE_WEB_MAX_URLS, CODE_WEB_MAX_SNIPPETS, CODE_WEB_MAX_CHARS_PER_SNIPPET, CODE_WEB_CACHE_TTL_MS, CODE_WEB_PREFERRED_DOMAINS } from './config.js';
 import { PDFParse } from 'pdf-parse';
 import { extractTables, extractMetadata } from './structured.js';
@@ -83,6 +84,51 @@ server.registerTool(
   async () => {
     await closeGlobalBrowser();
     return textResult("Browser closed successfully.");
+  }
+);
+
+server.registerTool(
+  "translate_text",
+  {
+    description: "Translate text using free/no-key external providers. Supports provider=auto, google (unofficial), mymemory, and duckduckgo (experimental Instant Answer). Do not send secrets or sensitive personal data.",
+    inputSchema: {
+      text: z.string().min(1).max(8000).describe("Text to translate"),
+      target_lang: z.string().min(2).max(20).default("vi").describe("Target language code, e.g. vi, en, ja, ko, zh-CN"),
+      source_lang: z.string().min(2).max(20).default("auto").describe("Source language code or auto"),
+      provider: z.enum(["auto", "google", "mymemory", "duckduckgo"]).default("auto")
+    }
+  },
+  async ({ text, target_lang, source_lang, provider }) => {
+    const cacheKey = makeCacheKey("translate_text", {
+      text,
+      source_lang,
+      target_lang,
+      provider
+    });
+
+    if (ENABLE_CACHE) {
+      const cached = getCache<any>(cacheKey);
+      if (cached) return textResult({ ...cached, cache: { hit: true, key: cacheKey } });
+    }
+
+    try {
+      const output = await translateText({
+        text,
+        sourceLang: source_lang,
+        targetLang: target_lang,
+        provider
+      });
+
+      const cachedOutput = {
+        ...output,
+        cache: { hit: false, key: cacheKey, ttlMs: FETCH_CACHE_TTL_MS }
+      };
+
+      if (ENABLE_CACHE) setCache(cacheKey, cachedOutput, FETCH_CACHE_TTL_MS);
+      return textResult(cachedOutput);
+    } catch (err: any) {
+      return textResult({ error: `translate_text failed: ${err?.message || String(err)}` });
+    }
   }
 );
 

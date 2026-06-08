@@ -4,6 +4,10 @@ const timeRange = document.querySelector("#timeRange");
 const maxResults = document.querySelector("#maxResults");
 const includeUnofficial = document.querySelector("#includeUnofficial");
 const referenceFilter = document.querySelector("#referenceFilter");
+const translationFilters = Array.from(document.querySelectorAll(".translation-filter"));
+const sourceLang = document.querySelector("#sourceLang");
+const targetLang = document.querySelector("#targetLang");
+const translateProvider = document.querySelector("#translateProvider");
 const resultsList = document.querySelector("#resultsList");
 const resultCount = document.querySelector("#resultCount");
 const detailPane = document.querySelector("#detailPane");
@@ -39,6 +43,10 @@ const modeCopy = {
   pdf: {
     label: "PDF",
     detailLabel: "Tài liệu PDF"
+  },
+  translate: {
+    label: "Dịch thuật",
+    detailLabel: "Bản dịch"
   }
 };
 
@@ -73,6 +81,308 @@ function formatUrl(url) {
   }
 }
 
+function isSafeHttpUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isTableSeparator(line) {
+  return /^\s*\|?[\s:-]+\|[\s|:-]*\s*$/.test(line);
+}
+
+function splitTableLine(line) {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function appendInlineMarkdown(parent, text) {
+  const pattern = /(!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)|`([^`]+)`|\*\*([^*]+)\*\*|\*([^*]+)\*|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\))/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = pattern.exec(text))) {
+    if (match.index > lastIndex) {
+      parent.append(document.createTextNode(text.slice(lastIndex, match.index)));
+    }
+
+    if (match[2] !== undefined && match[3]) {
+      const img = createEl("img", "markdown-image");
+      img.src = match[3];
+      img.alt = match[2] || "";
+      img.loading = "lazy";
+      img.decoding = "async";
+      parent.append(img);
+    } else if (match[4]) {
+      const code = createEl("code", "inline-code", match[4]);
+      parent.append(code);
+    } else if (match[5]) {
+      const strong = createEl("strong", null, match[5]);
+      parent.append(strong);
+    } else if (match[6]) {
+      const em = createEl("em", null, match[6]);
+      parent.append(em);
+    } else if (match[7] && match[8]) {
+      const link = createEl("a", null, match[7]);
+      link.href = match[8];
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      parent.append(link);
+    }
+
+    lastIndex = pattern.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parent.append(document.createTextNode(text.slice(lastIndex)));
+  }
+}
+
+function buildParagraph(lines) {
+  const paragraph = createEl("p");
+  appendInlineMarkdown(paragraph, lines.join(" ").replace(/\s+/g, " ").trim());
+  return paragraph;
+}
+
+function buildImage(line) {
+  const match = line.match(/^\s*!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)\s*$/);
+  if (!match || !isSafeHttpUrl(match[2])) return null;
+
+  const figure = createEl("figure", "markdown-figure");
+  const image = createEl("img", "markdown-image");
+  image.src = match[2];
+  image.alt = match[1] || "";
+  image.loading = "lazy";
+  image.decoding = "async";
+  figure.append(image);
+
+  if (match[1]) {
+    figure.append(createEl("figcaption", null, match[1]));
+  }
+
+  return figure;
+}
+
+function buildList(lines, ordered) {
+  const list = createEl(ordered ? "ol" : "ul");
+
+  lines.forEach((line) => {
+    const itemText = line.replace(ordered ? /^\s*\d+\.\s+/ : /^\s*[-*]\s+/, "");
+    const item = createEl("li");
+    appendInlineMarkdown(item, itemText);
+    list.append(item);
+  });
+
+  return list;
+}
+
+function buildTable(lines) {
+  const table = createEl("table");
+  const thead = createEl("thead");
+  const tbody = createEl("tbody");
+  const headers = splitTableLine(lines[0]);
+
+  const headerRow = createEl("tr");
+  headers.forEach((header) => {
+    const cell = createEl("th");
+    appendInlineMarkdown(cell, header);
+    headerRow.append(cell);
+  });
+  thead.append(headerRow);
+
+  lines.slice(2).forEach((line) => {
+    const row = createEl("tr");
+    splitTableLine(line).forEach((value) => {
+      const cell = createEl("td");
+      appendInlineMarkdown(cell, value);
+      row.append(cell);
+    });
+    tbody.append(row);
+  });
+
+  table.append(thead, tbody);
+  return table;
+}
+
+function buildHtmlTable(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const sourceTable = doc.querySelector("table");
+  if (!sourceTable) return null;
+
+  const table = createEl("table");
+  const rows = Array.from(sourceTable.querySelectorAll("tr"));
+
+  rows.forEach((sourceRow, rowIndex) => {
+    const row = createEl("tr");
+    const cells = Array.from(sourceRow.querySelectorAll("th,td"));
+
+    cells.forEach((sourceCell) => {
+      const tag = sourceCell.tagName.toLowerCase() === "th" || rowIndex === 0 ? "th" : "td";
+      const cell = createEl(tag);
+      const link = sourceCell.querySelector("a[href]");
+      if (link) {
+        const href = link.getAttribute("href") || "";
+        if (/^https?:\/\//i.test(href)) {
+          const anchor = createEl("a", null, link.textContent?.trim() || href);
+          anchor.href = href;
+          anchor.target = "_blank";
+          anchor.rel = "noreferrer";
+          cell.append(anchor);
+        } else {
+          cell.textContent = sourceCell.textContent?.replace(/\s+/g, " ").trim() || "";
+        }
+      } else {
+        cell.textContent = sourceCell.textContent?.replace(/\s+/g, " ").trim() || "";
+      }
+      row.append(cell);
+    });
+
+    table.append(row);
+  });
+
+  return table;
+}
+
+function renderMarkdown(markdown) {
+  const root = createEl("div", "markdown-body");
+  const lines = String(markdown || "").replace(/\r/g, "").split("\n");
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
+
+    const image = buildImage(line);
+    if (image) {
+      root.append(image);
+      i++;
+      continue;
+    }
+
+    if (/^\s*<table[\s>]/i.test(line)) {
+      const htmlLines = [line];
+      i++;
+      while (i < lines.length && !/<\/table>/i.test(lines[i - 1])) {
+        htmlLines.push(lines[i]);
+        i++;
+      }
+      const table = buildHtmlTable(htmlLines.join("\n"));
+      if (table) root.append(table);
+      continue;
+    }
+
+    const fence = line.match(/^```([A-Za-z0-9_+-]*)\s*$/);
+    if (fence) {
+      const codeLines = [];
+      i++;
+      while (i < lines.length && !/^```\s*$/.test(lines[i])) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) i++;
+
+      const pre = createEl("pre", "code-block");
+      const code = createEl("code", null, codeLines.join("\n"));
+      if (fence[1]) code.dataset.lang = fence[1];
+      pre.append(code);
+      root.append(pre);
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,4})\s+(.+)$/);
+    if (heading) {
+      const level = Math.min(heading[1].length + 2, 6);
+      const h = createEl(`h${level}`);
+      appendInlineMarkdown(h, heading[2].trim());
+      root.append(h);
+      i++;
+      continue;
+    }
+
+    if (i + 1 < lines.length && line.includes("|") && isTableSeparator(lines[i + 1])) {
+      const tableLines = [line, lines[i + 1]];
+      i += 2;
+      while (i < lines.length && lines[i].includes("|") && lines[i].trim()) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      root.append(buildTable(tableLines));
+      continue;
+    }
+
+    if (/^\s*[-*]\s+/.test(line)) {
+      const listLines = [];
+      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) {
+        listLines.push(lines[i]);
+        i++;
+      }
+      root.append(buildList(listLines, false));
+      continue;
+    }
+
+    if (/^\s*\d+\.\s+/.test(line)) {
+      const listLines = [];
+      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+        listLines.push(lines[i]);
+        i++;
+      }
+      root.append(buildList(listLines, true));
+      continue;
+    }
+
+    if (/^\s*>\s+/.test(line)) {
+      const quote = createEl("blockquote");
+      const quoteLines = [];
+      while (i < lines.length && /^\s*>\s+/.test(lines[i])) {
+        quoteLines.push(lines[i].replace(/^\s*>\s+/, ""));
+        i++;
+      }
+      appendInlineMarkdown(quote, quoteLines.join(" "));
+      root.append(quote);
+      continue;
+    }
+
+    const paragraphLines = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !/^```/.test(lines[i]) &&
+      !/^(#{1,4})\s+/.test(lines[i]) &&
+      !/^\s*[-*]\s+/.test(lines[i]) &&
+      !/^\s*\d+\.\s+/.test(lines[i]) &&
+      !/^\s*>\s+/.test(lines[i])
+    ) {
+      if (i + 1 < lines.length && lines[i].includes("|") && isTableSeparator(lines[i + 1])) break;
+      paragraphLines.push(lines[i]);
+      i++;
+    }
+
+    if (paragraphLines.length > 0) {
+      root.append(buildParagraph(paragraphLines));
+    } else {
+      i++;
+    }
+  }
+
+  if (!root.childElementCount) {
+    root.append(createEl("p", null, "Không có nội dung để hiển thị."));
+  }
+
+  return root;
+}
+
 function setStatus(text) {
   statusText.textContent = text;
 }
@@ -89,9 +399,13 @@ function updateModeUI() {
   });
 
   const legalMode = state.mode === "legal" || state.mode === "procedure";
+  const translateMode = state.mode === "translate";
   referenceFilter.classList.toggle("hidden", !legalMode);
+  translationFilters.forEach((filter) => filter.classList.toggle("hidden", !translateMode));
   queryInput.placeholder = legalMode
     ? "Tìm văn bản, số hiệu, thủ tục, hồ sơ..."
+    : translateMode
+      ? "Nhập văn bản cần dịch..."
     : state.mode === "code"
       ? "Tìm ví dụ mã nguồn, thư viện, lỗi, implementation..."
       : state.mode === "pdf"
@@ -141,6 +455,18 @@ function buildSearchRequest(query) {
     };
   }
 
+  if (state.mode === "translate") {
+    return {
+      path: "/api/translate",
+      payload: {
+        text: query,
+        source_lang: sourceLang.value || "auto",
+        target_lang: targetLang.value || "vi",
+        provider: translateProvider.value || "auto"
+      }
+    };
+  }
+
   if (state.mode === "legal" || state.mode === "procedure") {
     return {
       path: "/api/search/vietnam-legal",
@@ -165,6 +491,24 @@ function buildSearchRequest(query) {
 }
 
 function normalizeResults(data) {
+  if (state.mode === "translate") {
+    return [{
+      id: "translation-result",
+      mode: "translate",
+      title: `Dịch sang ${data.targetLang || targetLang.value || "vi"}`,
+      url: "",
+      source: data.provider || data.providerMode || "translation",
+      snippet: truncate(data.translatedText, 260),
+      translatedText: data.translatedText || "",
+      originalText: data.text || queryInput.value.trim(),
+      provider: data.provider,
+      providerMode: data.providerMode,
+      sourceLang: data.detectedSourceLang || data.sourceLang,
+      targetLang: data.targetLang,
+      alternativesTried: data.alternativesTried || []
+    }];
+  }
+
   if (state.mode === "code") {
     return (data.results || []).map((item, index) => ({
       id: `${index}-${item.url}`,
@@ -248,7 +592,8 @@ function renderResults() {
 
     const title = createEl("h2", "result-title", result.title);
     const url = createEl("div", "result-url", formatUrl(result.url));
-    const snippet = createEl("p", "result-snippet", result.snippet || "Không có mô tả.");
+    const snippet = createEl("p", "result-snippet");
+    appendInlineMarkdown(snippet, result.snippet || "Không có mô tả.");
     const tags = createEl("div", "tag-row");
 
     tags.append(createEl("span", "tag", modeCopy[result.mode].label));
@@ -312,6 +657,8 @@ function renderDetail(data) {
     const code = createEl("code", null, data.code || "");
     pre.append(code);
     content.append(pre);
+  } else if (data.markdown) {
+    content.append(renderMarkdown(data.markdown));
   } else {
     content.append(createEl("p", "detail-text", data.text || "Không có nội dung để hiển thị."));
   }
@@ -337,6 +684,11 @@ async function openResult(index) {
       ],
       code: result.code
     });
+    return;
+  }
+
+  if (result.mode === "translate") {
+    renderTranslationDetail(result);
     return;
   }
 
@@ -380,7 +732,8 @@ async function openResult(index) {
         { label: "Nguồn", value: result.source || "" },
         { label: "Loại nội dung", value: data.contentType || data.mode || "" }
       ],
-      text: data.markdown || data.text || ""
+      markdown: data.markdown,
+      text: data.text || ""
     });
   } catch (err) {
     renderError(detailPane, "Không tải được nội dung", err.message || String(err));
@@ -413,16 +766,50 @@ function renderLegalDetail(result, data) {
   });
 }
 
+function renderTranslationDetail(result) {
+  const lines = [
+    "### Bản dịch",
+    result.translatedText || "Không có bản dịch.",
+    "",
+    "### Nguyên văn",
+    result.originalText || ""
+  ];
+
+  renderDetail({
+    kicker: modeCopy.translate.detailLabel,
+    title: result.title,
+    tags: [
+      { text: result.provider || "provider" },
+      { text: `${result.sourceLang || "auto"} → ${result.targetLang || ""}`.trim(), className: "code" }
+    ],
+    meta: [
+      { label: "Provider", value: result.provider },
+      { label: "Chế độ provider", value: result.providerMode },
+      { label: "Nguồn", value: result.sourceLang },
+      { label: "Đích", value: result.targetLang },
+      {
+        label: "Fallback đã thử",
+        value: result.alternativesTried?.map((item) => `${item.provider}: ${item.error}`)
+      }
+    ],
+    markdown: lines.join("\n")
+  });
+}
+
 async function fetchWebDetail(url) {
   try {
-    return await fetchJson("/api/fetch/static", { url, max_chars: 24000 });
+    return await fetchJson("/api/fetch/markdown", { url, max_chars: 36000 });
   } catch {
-    return await fetchJson("/api/fetch/rendered/markdown", {
-      url,
-      max_chars: 24000,
-      wait_ms: 1000,
-      scroll_steps: 2
-    });
+    try {
+      return await fetchJson("/api/fetch/static", { url, max_chars: 24000 });
+    } catch {
+      return await fetchJson("/api/fetch/rendered/markdown", {
+        url,
+        max_chars: 36000,
+        wait_ms: 1000,
+        scroll_steps: 2
+      });
+    }
   }
 }
 
@@ -449,6 +836,9 @@ async function runSearch(event) {
     });
     state.results = normalizeResults(data);
     renderResults();
+    if (state.mode === "translate" && state.results.length > 0) {
+      openResult(0);
+    }
     setStatus(`${state.results.length} kết quả · ${modeCopy[state.mode].label}`);
   } catch (err) {
     if (err.name === "AbortError") return;

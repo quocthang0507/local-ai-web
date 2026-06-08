@@ -202,6 +202,14 @@ async function runTests() {
         max_snippets: 2
     }, 60000, "results");
 
+    // 5.25 Translation
+    await runTest("Translate Text (Auto)", "translate_text", {
+        text: "Hello, how can I help you today?",
+        source_lang: "auto",
+        target_lang: "vi",
+        provider: "auto"
+    }, 30000, "translatedText");
+
     // 5.5 Vietnam Legal/Admin Research
     await runTest("Search Vietnam Legal Sources", "search_vietnam_legal", {
         query: "Nghị định 30/2020/NĐ-CP thể thức văn bản hành chính",

@@ -87,6 +87,38 @@ export const swaggerDocument = {
         }
       }
     },
+    "/api/translate": {
+      post: {
+        summary: "Translate Text",
+        description: "Translate text using free/no-key external providers: auto, Google unofficial, MyMemory, or DuckDuckGo Instant Answer best-effort.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  text: { type: "string" },
+                  source_lang: { type: "string", default: "auto" },
+                  target_lang: { type: "string", default: "vi" },
+                  provider: { type: "string", enum: ["auto", "google", "mymemory", "duckduckgo"], default: "auto" }
+                },
+                required: ["text"],
+                example: {
+                  text: "Hello, how can I help you today?",
+                  source_lang: "auto",
+                  target_lang: "vi",
+                  provider: "auto"
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "200": { description: "Successful response" }
+        }
+      }
+    },
     "/api/fetch/static": {
       post: {
         summary: "Fetch URL",
@@ -105,6 +137,34 @@ export const swaggerDocument = {
                 example: {
                   url: "https://github.com/google/mcp-sdk-typescript/blob/main/README.md",
                   max_chars: 5000
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          "200": { description: "Successful response" }
+        }
+      }
+    },
+    "/api/fetch/markdown": {
+      post: {
+        summary: "Fetch Markdown",
+        description: "Fetch and extract cleaned Markdown from a static HTML URL. Recommended for optimized web UI display and article/documentation pages.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  url: { type: "string" },
+                  max_chars: { type: "integer", default: 30000 }
+                },
+                required: ["url"],
+                example: {
+                  url: "https://example.com",
+                  max_chars: 12000
                 }
               }
             }

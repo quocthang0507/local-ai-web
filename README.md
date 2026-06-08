@@ -31,6 +31,23 @@ This project also includes specialized retrieval tools for **Vietnamese law, adm
 
 These tools are designed for retrieval and source grounding. They do not replace a qualified Vietnamese lawyer or a competent authority, and models should cite URLs and state uncertainty when legal effect is not verified.
 
+## Translation
+
+The project includes integrated text translation for both the API/web app and LM Studio MCP:
+
+- `translate_text`: translates text through free/no-key external providers.
+- REST endpoint: `POST /api/translate`.
+- Web mode: `Dịch thuật`.
+
+Supported providers:
+
+- `auto`: tries configured providers in order.
+- `google`: uses an unofficial Google Translate endpoint.
+- `mymemory`: uses the public MyMemory translation API.
+- `duckduckgo`: experimental best-effort DuckDuckGo Instant Answer lookup. It often does not return translations and is mostly a fallback.
+
+Do not send secrets or sensitive personal data to external translation providers.
+
 > This project is for local research and personal productivity. It does not bypass login pages, paywalls, CAPTCHA, or website access controls.
 
 ---
@@ -53,26 +70,63 @@ These tools are designed for retrieval and source grounding. They do not replace
 
 ## Architecture
 
-The system uses a Retrieval-Augmented pipeline for code search:
+`local-ai-web` has two local entry points:
+
+- A browser web app served by the Express API server at `http://localhost:3000`.
+- An MCP stdio server launched by LM Studio through `mcp.json`.
+
+Both entry points share the same retrieval, extraction, ranking, cache, and safety modules.
+
+```mermaid
+flowchart LR
+    Browser[Browser Web App] --> API[Express Web/API Server]
+    LMStudio[LM Studio / Local LLM] --> MCP[MCP stdio Server]
+
+    API --> Tools[Shared Tool Modules]
+    MCP --> Tools
+
+    Tools --> SearXNG[Local SearXNG Docker]
+    Tools --> SafeFetch[Safe HTTP Fetch]
+    Tools --> Renderer[Playwright Renderer]
+    Tools --> Cache[In-memory Cache]
+
+    SafeFetch --> Extractors[Text / Markdown / PDF / Tables]
+    Renderer --> Extractors
+
+    Extractors --> API
+    Extractors --> MCP
+```
+
+The shared tool layer provides these specialized retrieval pipelines:
 
 ```mermaid
 flowchart TD
-    A[User Query] --> B[Query Rewriting]
-    B --> C[SearXNG Search]
-    C --> D[URL Filtering]
-    D --> E[Fetch Page]
-    E --> F[Code Extraction]
-    F --> G[Ranking]
-    G --> H[LLM Response]
-````
+    Q[User Query] --> Mode{Search Mode}
 
-This design ensures:
+    Mode --> Web[Web Search]
+    Web --> WebSearch[SearXNG Search]
+    WebSearch --> WebResults[Compact Results]
+    WebResults --> WebFetch[Fetch Detail on Click]
 
-*   ✅ up-to-date code retrieval
-*   ✅ reduced hallucination
-*   ✅ better real-world examples
+    Mode --> Code[Code Search]
+    Code --> CodeRewrite[Query Rewriting]
+    CodeRewrite --> CodeSearch[SearXNG Search]
+    CodeSearch --> CodeFilter[Prioritize GitHub / StackOverflow / Docs]
+    CodeFilter --> CodeExtract[Extract Code Blocks]
+    CodeExtract --> CodeRank[Rank Snippets]
 
-SearXNG runs in Docker. The MCP server runs locally with Node.js and is launched by LM Studio through `mcp.json`.
+    Mode --> Legal[Vietnam Legal / Admin Search]
+    Legal --> LegalRewrite[Legal Query Rewriting]
+    LegalRewrite --> LegalSearch[Official-domain Search]
+    LegalSearch --> LegalFetch[Fetch HTML / PDF Document]
+    LegalFetch --> LegalMeta[Extract Legal Metadata and Excerpts]
+
+    WebFetch --> UI[Optimized Web UI]
+    CodeRank --> UI
+    LegalMeta --> UI
+```
+
+SearXNG runs in Docker and stays bound to `127.0.0.1`. The Node.js server exposes REST APIs, Swagger UI, and the browser app. The MCP server exposes the same capabilities to LM Studio. All outbound fetch/render paths go through SSRF protection, truncation, and untrusted-content handling before returning data to a model or the web UI.
 
 ---
 
@@ -177,6 +231,10 @@ Shows in-memory cache statistics (e.g. memory usage, cache size).
 
 Closes the background Playwright Chromium browser instance to free up memory.
 
+### `translate_text`
+
+Translates text using free/no-key external providers. Provider `auto` tries the configured provider list; `google` and `mymemory` are the practical defaults, while `duckduckgo` is experimental.
+
 ### `search_code_web`
 
   - Web code search
@@ -223,6 +281,7 @@ local-ai-web/
 │  │  ├─ searxng.ts        # SearXNG API client
 │  │  ├─ code_web.ts       # Code search & extraction logic
 │  │  ├─ legal_vn.ts       # Vietnam legal/admin search & extraction logic
+│  │  ├─ translate.ts      # Translation provider integration
 │  │  ├─ structured.ts     # Table & Metadata extraction
 │  │  ├─ cache.ts          # In-memory caching
 │  │  ├─ extract.ts        # HTML to Markdown/Text extraction
