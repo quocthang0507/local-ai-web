@@ -4,7 +4,7 @@ const RAW_SEARXNG_ENGINES = (process.env.SEARXNG_ENGINES || "")
   .map((s) => s.trim())
   .filter(Boolean);
 
-export const DEFAULT_SEARXNG_ENGINES = ["google", "bing", "wikipedia"];
+export const DEFAULT_SEARXNG_ENGINES = ["bing", "duckduckgo", "wikipedia"];
 export const USING_DEFAULT_SEARXNG_ENGINES = RAW_SEARXNG_ENGINES.length === 0;
 export const SEARXNG_ENGINES = USING_DEFAULT_SEARXNG_ENGINES
   ? DEFAULT_SEARXNG_ENGINES
@@ -32,6 +32,12 @@ export const FETCH_CACHE_TTL_MS = Number(process.env.FETCH_CACHE_TTL_MS || "6000
 export const RENDER_CACHE_TTL_MS = Number(process.env.RENDER_CACHE_TTL_MS || "600000");
 
 export const DEBUG = process.env.DEBUG_LOCAL_WEB_READER === "1";
+export const HEALTH_CHECK_BROWSER = process.env.HEALTH_CHECK_BROWSER === "1";
+
+export const MCP_ENABLED_TOOLS = (process.env.MCP_ENABLED_TOOLS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 export const CODE_WEB_CACHE_TTL_MS = Number(process.env.CODE_WEB_CACHE_TTL_MS || "300000");
 export const CODE_WEB_MAX_URLS = Number(process.env.CODE_WEB_MAX_URLS || "5");

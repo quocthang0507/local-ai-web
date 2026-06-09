@@ -7,9 +7,11 @@
       ],
       "env": {
         "SEARXNG_URL": "http://127.0.0.1:8080",
-        "SEARXNG_ENGINES": "google,bing,wikipedia",
-        "REQUEST_TIMEOUT_MS": "15000",
+        "SEARXNG_ENGINES": "bing,duckduckgo,wikipedia",
+        "REQUEST_TIMEOUT_MS": "10000",
         "DEFAULT_MAX_CHARS": "12000",
+        "HEALTH_CHECK_BROWSER": "0",
+        "MCP_ENABLED_TOOLS": "health_check,search_web,fetch_url,fetch_markdown,fetch_document,extract_structured_data,translate_text,close_browser",
         "RENDER_NAV_TIMEOUT_MS": "30000",
         "RENDER_NETWORK_IDLE_TIMEOUT_MS": "10000",
         "RENDER_EXTRA_WAIT_MS": "1500",

@@ -9,20 +9,30 @@ import { searxngSearch } from './searxng.js';
 import { searchCodeWeb, githubToRaw, isGitHubRepoUrl, isGitHubFileUrl, isGistUrl } from './code_web.js';
 import { searchVietnamLegal, fetchVietnamLegalDocument, buildVietnamLegalContext } from './legal_vn.js';
 import { translateText } from './translate.js';
-import { ENABLE_CACHE, SEARXNG_URL, SEARXNG_ENGINES, SEARXNG_REQUEST_HEADERS, REQUEST_TIMEOUT_MS, DEFAULT_MAX_CHARS, FETCH_CACHE_TTL_MS, SEARCH_CACHE_TTL_MS, RENDER_CACHE_TTL_MS, CODE_WEB_MAX_URLS, CODE_WEB_MAX_SNIPPETS, CODE_WEB_MAX_CHARS_PER_SNIPPET, CODE_WEB_CACHE_TTL_MS, CODE_WEB_PREFERRED_DOMAINS } from './config.js';
+import { ENABLE_CACHE, SEARXNG_URL, SEARXNG_ENGINES, SEARXNG_REQUEST_HEADERS, REQUEST_TIMEOUT_MS, DEFAULT_MAX_CHARS, FETCH_CACHE_TTL_MS, SEARCH_CACHE_TTL_MS, RENDER_CACHE_TTL_MS, HEALTH_CHECK_BROWSER, MCP_ENABLED_TOOLS } from './config.js';
 import { PDFParse } from 'pdf-parse';
 import { extractTables, extractMetadata } from './structured.js';
 import * as cheerio from 'cheerio';
 
 export function registerTools(server: McpServer) {
-server.registerTool(
+const enabledTools = MCP_ENABLED_TOOLS.length > 0 ? new Set(MCP_ENABLED_TOOLS) : null;
+const registerTool: McpServer["registerTool"] = ((name: string, ...args: any[]) => {
+  if (enabledTools && !enabledTools.has(name)) {
+    debugLog("tool disabled by MCP_ENABLED_TOOLS", name);
+    return;
+  }
+
+  return (server.registerTool as any)(name, ...args);
+}) as McpServer["registerTool"];
+
+registerTool(
   "health_check",
-  { description: "Check whether MCP server, SearXNG, Playwright Chromium, and cache are ready." },
+  { description: "Check whether MCP server, SearXNG, and cache are ready. Set HEALTH_CHECK_BROWSER=1 to also launch-check Playwright Chromium." },
   async () => {
     const checks: Record<string, unknown> = {
       mcp: "ok",
       searxng: "unknown",
-      playwright: "unknown",
+      playwright: HEALTH_CHECK_BROWSER ? "unknown" : "skipped",
       searxngUrl: SEARXNG_URL,
       cacheEnabled: ENABLE_CACHE,
       cacheSize: cacheSize()
@@ -43,21 +53,23 @@ server.registerTool(
       checks.searxng = `error: ${err?.message || String(err)}`;
     }
 
-    try {
-      const browser = await getGlobalBrowser();
-      const context = await browser.newContext();
-      await context.close();
+    if (HEALTH_CHECK_BROWSER) {
+      try {
+        const browser = await getGlobalBrowser();
+        const context = await browser.newContext();
+        await context.close();
 
-      checks.playwright = "ok";
-    } catch (err: any) {
-      checks.playwright = `error: ${err?.message || String(err)}`;
+        checks.playwright = "ok";
+      } catch (err: any) {
+        checks.playwright = `error: ${err?.message || String(err)}`;
+      }
     }
 
     return textResult(checks);
   }
 );
 
-server.registerTool(
+registerTool(
   "clear_cache",
   { description: "Clear in-memory search/fetch/render cache." },
   async () => {
@@ -70,7 +82,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "cache_stats",
   { description: "Show in-memory cache statistics." },
   async () => {
@@ -78,7 +90,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "close_browser",
   { description: "Close the background browser to free up memory." },
   async () => {
@@ -87,7 +99,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "translate_text",
   {
     description: "Translate text using free/no-key external providers. Supports provider=auto, google (unofficial), mymemory, and duckduckgo (experimental Instant Answer). Do not send secrets or sensitive personal data.",
@@ -132,7 +144,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "search_web",
   {
     description: "Search the web using local SearXNG. Best for finding general information, news, or locating specific site URLs. Example: 'latest news on MCP protocol', 'who is the CEO of Google?'. Supports time ranges like 'day' or 'month' for fresh results.",
@@ -235,7 +247,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "fetch_url",
   {
     description: "Fetch and extract readable plain text from a URL. Best for raw data, simple HTML, or plain text files. Automatically handles GitHub/Gist file URLs by fetching the raw source (e.g., 'https://github.com/user/repo/blob/main/index.js' -> returns raw JS). Example: 'Summarize the text from https://example.com/api-docs'.",
@@ -304,7 +316,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "fetch_markdown",
   {
     description: "Fetch and extract cleaned Markdown from static HTML URL. Recommended for articles, blogs, and documentation where preserving structure (headings, lists) is important. Example: 'Convert this blog post to markdown: https://example.com/blog/123'. Automatically wraps GitHub/Gist code in markdown code blocks.",
@@ -389,7 +401,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "fetch_rendered_source",
   {
     description: "Render a JavaScript-heavy SPA page (React, Vue, etc.) and return rendered HTML/text. Use this when fetch_url returns an empty page. Example: 'Render the content of this dashboard: https://app.example.com'. Supports auto-scrolling for lazy-loaded content.",
@@ -479,7 +491,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "fetch_rendered_markdown",
   {
     description: "Render a JavaScript-heavy page and return cleaned Markdown extracted from the rendered DOM.",
@@ -563,7 +575,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "search_code_web",
   {
     description: "Search for code snippets, implementations, and examples across the web (GitHub, StackOverflow, docs). Example: 'Python script to upload file to S3', 'Express JWT middleware example'. Ranks results based on relevance and code quality.",
@@ -588,7 +600,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "search_vietnam_legal",
   {
     description: "Search official Vietnamese legal, administrative-document, and public-procedure sources. Uses official domains by default (vbpl.vn, vanban.chinhphu.vn, congbao.chinhphu.vn, gov.vn, quochoi.vn). Use before answering Vietnam law or administrative document questions.",
@@ -617,7 +629,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "fetch_vietnam_legal_document",
   {
     description: "Fetch a Vietnamese legal/admin document URL and extract text, Markdown, and heuristic metadata such as document number, type, authority, issue date, effective-date signals, and citations. Best after search_vietnam_legal.",
@@ -642,7 +654,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "vietnam_legal_qa_context",
   {
     description: "Build source-backed context for Vietnamese law, administrative document, or public-procedure Q&A. Searches official sources, fetches top documents, and returns relevant excerpts plus answer guidance. It does not provide legal advice by itself.",
@@ -683,7 +695,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "fetch_document",
   {
     description: "Fetch and extract text from a PDF or other supported document URL. SSRF protected.",
@@ -734,7 +746,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "extract_structured_data",
   {
     description: "Extract HTML tables (as Markdown) and JSON-LD metadata from a URL. Best for pricing tables, product specs, or structured SEO data. Example: 'Get the pricing table from https://example.com/pricing'.",
@@ -802,7 +814,7 @@ server.registerTool(
   }
 );
 
-server.registerTool(
+registerTool(
   "list_github_repo",
   {
     description: "List files and directories in a GitHub repository or subdirectory. Best for exploring a project's structure before reading specific files. Example: 'List the contents of https://github.com/google/mcp-sdk-typescript'.",

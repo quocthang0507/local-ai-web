@@ -13,6 +13,16 @@ if (!fs.existsSync(indexPath)) {
 }
 
 const isWindows = process.platform === "win32";
+const defaultLmStudioTools = [
+  "health_check",
+  "search_web",
+  "fetch_url",
+  "fetch_markdown",
+  "fetch_document",
+  "extract_structured_data",
+  "translate_text",
+  "close_browser"
+].join(",");
 
 const config = {
   mcpServers: {
@@ -21,7 +31,8 @@ const config = {
       args: [indexPath],
       env: {
         SEARXNG_URL: process.env.SEARXNG_URL || "http://127.0.0.1:8080",
-        REQUEST_TIMEOUT_MS: process.env.REQUEST_TIMEOUT_MS || "15000",
+        SEARXNG_ENGINES: process.env.SEARXNG_ENGINES || "bing,duckduckgo,wikipedia",
+        REQUEST_TIMEOUT_MS: process.env.REQUEST_TIMEOUT_MS || "10000",
         MAX_FETCH_BYTES: process.env.MAX_FETCH_BYTES || "524288",
         DEFAULT_MAX_CHARS: process.env.DEFAULT_MAX_CHARS || "12000",
         RENDER_NAV_TIMEOUT_MS: process.env.RENDER_NAV_TIMEOUT_MS || "30000",
@@ -34,6 +45,9 @@ const config = {
           process.env.RENDER_BLOCK_RESOURCE_TYPES || "image,media,font",
         ALLOW_DOMAINS: process.env.ALLOW_DOMAINS || "",
         DEBUG_LOCAL_WEB_READER: process.env.DEBUG_LOCAL_WEB_READER || "0",
+        HEALTH_CHECK_BROWSER: process.env.HEALTH_CHECK_BROWSER || "0",
+        MCP_ENABLED_TOOLS:
+          process.env.MCP_ENABLED_TOOLS || defaultLmStudioTools,
         ENABLE_CACHE: process.env.ENABLE_CACHE || "1",
         SEARCH_CACHE_TTL_MS: process.env.SEARCH_CACHE_TTL_MS || "300000",
         FETCH_CACHE_TTL_MS: process.env.FETCH_CACHE_TTL_MS || "600000",

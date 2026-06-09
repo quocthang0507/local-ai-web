@@ -34,7 +34,7 @@ async function runTests() {
             const result = await client.callTool({
                 name: toolName,
                 arguments: args
-            }, {
+            }, undefined, {
                 timeout: timeoutMs
             });
             const duration = Date.now() - start;

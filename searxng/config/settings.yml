@@ -1,10 +1,9 @@
 use_default_settings:
   engines:
-    remove:
-      - ahmia
-      - torch
-      - wikidata
-      - radio browser
+    keep_only:
+      - bing
+      - duckduckgo
+      - wikipedia
 
 server:
   secret_key: "this-is-a-long-random-string-for-ai-configuration"
@@ -19,11 +18,9 @@ search:
     - json
 
 engines:
-  - name: karmasearch
-    disabled: true
-  - name: brave
-    disabled: true
+  - name: bing
+    disabled: false
   - name: duckduckgo
     disabled: false
-  - name: startpage
-    disabled: true
+  - name: wikipedia
+    disabled: false
