@@ -2,8 +2,8 @@ use_default_settings:
   engines:
     keep_only:
       - bing
-      - duckduckgo
-      - wikipedia
+      - qwant
+      - mojeek
 
 server:
   secret_key: "this-is-a-long-random-string-for-ai-configuration"
@@ -16,11 +16,3 @@ search:
   formats:
     - html
     - json
-
-engines:
-  - name: bing
-    disabled: false
-  - name: duckduckgo
-    disabled: false
-  - name: wikipedia
-    disabled: false

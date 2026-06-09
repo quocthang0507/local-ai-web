@@ -9,7 +9,7 @@ import { searxngSearch } from './searxng.js';
 import { searchCodeWeb, githubToRaw, isGitHubRepoUrl, isGitHubFileUrl, isGistUrl } from './code_web.js';
 import { searchVietnamLegal, fetchVietnamLegalDocument, buildVietnamLegalContext } from './legal_vn.js';
 import { translateText } from './translate.js';
-import { ENABLE_CACHE, SEARXNG_URL, SEARXNG_ENGINES, SEARXNG_REQUEST_HEADERS, REQUEST_TIMEOUT_MS, DEFAULT_MAX_CHARS, FETCH_CACHE_TTL_MS, SEARCH_CACHE_TTL_MS, RENDER_CACHE_TTL_MS, HEALTH_CHECK_BROWSER, MCP_ENABLED_TOOLS } from './config.js';
+import { ENABLE_CACHE, SEARXNG_URL, SEARXNG_ENGINES, SEARXNG_REQUEST_HEADERS, REQUEST_TIMEOUT_MS, DEFAULT_MAX_CHARS, FETCH_CACHE_TTL_MS, SEARCH_CACHE_TTL_MS, RENDER_CACHE_TTL_MS, HEALTH_CHECK_BROWSER, MCP_ENABLED_TOOLS, USING_DEFAULT_SEARXNG_ENGINES } from './config.js';
 import { PDFParse } from 'pdf-parse';
 import { extractTables, extractMetadata } from './structured.js';
 import * as cheerio from 'cheerio';
@@ -163,7 +163,7 @@ registerTool(
       max_results,
       language: language || "",
       time_range: time_range || "",
-      engines: SEARXNG_ENGINES.join(",")
+      engines: USING_DEFAULT_SEARXNG_ENGINES ? "" : SEARXNG_ENGINES.join(",")
     });
 
     if (ENABLE_CACHE) {
@@ -193,7 +193,7 @@ registerTool(
         endpoint.searchParams.set("time_range", time_range);
       }
 
-      if (SEARXNG_ENGINES.length > 0) {
+      if (!USING_DEFAULT_SEARXNG_ENGINES && SEARXNG_ENGINES.length > 0) {
         endpoint.searchParams.set("engines", SEARXNG_ENGINES.join(","));
       }
 

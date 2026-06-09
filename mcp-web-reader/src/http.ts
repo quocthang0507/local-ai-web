@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { swaggerDocument } from "./swagger.js";
 import { cacheSize, clearCache, cacheStats, getCache, setCache } from "./cache.js";
 import { closeGlobalBrowser, getGlobalBrowser, fetchWithSafety, renderUrlToSource } from "./browser.js";
-import { SEARXNG_URL, ENABLE_CACHE, SEARXNG_REQUEST_HEADERS, REQUEST_TIMEOUT_MS, SEARXNG_ENGINES, FETCH_CACHE_TTL_MS, RENDER_CACHE_TTL_MS, SEARCH_CACHE_TTL_MS, CODE_WEB_MAX_URLS, CODE_WEB_MAX_SNIPPETS, CODE_WEB_MAX_CHARS_PER_SNIPPET, CODE_WEB_CACHE_TTL_MS, CODE_WEB_PREFERRED_DOMAINS } from "./config.js";
+import { SEARXNG_URL, ENABLE_CACHE, SEARXNG_REQUEST_HEADERS, REQUEST_TIMEOUT_MS, SEARXNG_ENGINES, FETCH_CACHE_TTL_MS, RENDER_CACHE_TTL_MS, SEARCH_CACHE_TTL_MS, CODE_WEB_MAX_URLS, CODE_WEB_MAX_SNIPPETS, CODE_WEB_MAX_CHARS_PER_SNIPPET, CODE_WEB_CACHE_TTL_MS, CODE_WEB_PREFERRED_DOMAINS, USING_DEFAULT_SEARXNG_ENGINES } from "./config.js";
 import { makeCacheKey, htmlToText } from "./helper.js";
 import { htmlToMarkdown } from "./extract.js";
 import { extractTables, extractMetadata } from "./structured.js";
@@ -125,7 +125,7 @@ app.post("/api/search", async (req, res) => {
   const { query, max_results = 5, language, time_range } = req.body;
   if (!query) return res.status(400).json({ error: "query is required" });
 
-  const cacheKey = makeCacheKey("search_web", { query, max_results, language: language || "", time_range: time_range || "", engines: SEARXNG_ENGINES.join(",") });
+  const cacheKey = makeCacheKey("search_web", { query, max_results, language: language || "", time_range: time_range || "", engines: USING_DEFAULT_SEARXNG_ENGINES ? "" : SEARXNG_ENGINES.join(",") });
 
   if (ENABLE_CACHE) {
     const cached = getCache<any>(cacheKey);
@@ -138,7 +138,7 @@ app.post("/api/search", async (req, res) => {
     endpoint.searchParams.set("format", "json");
     if (language) endpoint.searchParams.set("language", language);
     if (time_range) endpoint.searchParams.set("time_range", time_range);
-    if (SEARXNG_ENGINES.length > 0) endpoint.searchParams.set("engines", SEARXNG_ENGINES.join(","));
+    if (!USING_DEFAULT_SEARXNG_ENGINES && SEARXNG_ENGINES.length > 0) endpoint.searchParams.set("engines", SEARXNG_ENGINES.join(","));
 
     const response = await fetch(endpoint, {
       headers: SEARXNG_REQUEST_HEADERS,

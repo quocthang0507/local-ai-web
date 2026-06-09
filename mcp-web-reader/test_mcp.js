@@ -124,8 +124,8 @@ async function runTests() {
         max_chars: 2000
     }, 15000, "text");
 
-    await runTest("Fetch URL (Static - Hacker News)", "fetch_url", {
-        url: "https://news.ycombinator.com/",
+    await runTest("Fetch URL (Static - Wikipedia)", "fetch_url", {
+        url: "https://www.wikipedia.org/",
         max_chars: 5000
     }, 15000, "text");
 
@@ -143,8 +143,8 @@ async function runTests() {
     }, 15000, "expect_error"); // SSRF block check
 
     // 3.5 Markdown Fetching
-    await runTest("Fetch Markdown (Static - Hacker News)", "fetch_markdown", {
-        url: "https://news.ycombinator.com/",
+    await runTest("Fetch Markdown (Static - Wikipedia Main)", "fetch_markdown", {
+        url: "https://www.wikipedia.org/",
         max_chars: 10000
     }, 15000, "markdown");
 
